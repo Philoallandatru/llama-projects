@@ -7,10 +7,17 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
+from llama_index.core import Document
+
 from .models import SourceConfig, SourceInfo, SourceType, SyncResult
 from .paths import Paths
 from .sources.base import BaseDataSource
 from .sources.local import LocalDataSource
+from .sources.jira import JiraDataSource
+from .sources.confluence import ConfluenceDataSource
+from .indexing.vector import VectorIndexer
+from .indexing.bm25 import BM25Indexer
+from .indexing.hybrid import HybridRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +205,11 @@ class SourceManager:
                     logger.error(error_msg)
                     errors.append(error_msg)
 
+            # 4. 构建索引
+            logger.info(f"Building indexes for source: {name}")
+            index_errors = self._build_indexes(name, doc_dir)
+            errors.extend(index_errors)
+
             # 保存 manifest
             manifest = {
                 "last_sync": datetime.now().isoformat(),
@@ -226,6 +238,132 @@ class SourceManager:
             logger.error(f"Sync failed for source: {name}, error: {e}")
             raise
 
+    def query(
+        self,
+        name: str,
+        query: str,
+        mode: str = "hybrid",
+        top_k: int = 5
+    ) -> List[dict]:
+        """查询数据源
+
+        Args:
+            name: 数据源名称
+            query: 查询字符串
+            mode: 检索模式 - "hybrid", "vector", "bm25"
+            top_k: 返回结果数量
+
+        Returns:
+            查询结果列表
+
+        Raises:
+            ValueError: 如果数据源不存在或索引未构建
+        """
+        if not self.paths.exists(name):
+            raise ValueError(f"数据源 '{name}' 不存在")
+
+        # 验证查询字符串
+        if not query or not query.strip():
+            logger.warning("Empty query string, returning empty results")
+            return []
+
+        # 检查索引是否存在
+        vector_dir = self.paths.indexes(name) / "vector"
+        bm25_dir = self.paths.indexes(name) / "bm25"
+
+        # 检查向量索引
+        vector_exists = vector_dir.exists() and (vector_dir / "docstore.json").exists()
+        # 检查 BM25 索引
+        bm25_exists = bm25_dir.exists() and (bm25_dir / "nodes.pkl").exists()
+
+        if not vector_exists and not bm25_exists:
+            raise ValueError(f"数据源 '{name}' 的索引尚未构建，请先运行 sync 命令")
+
+        # 创建混合检索器
+        retriever = HybridRetriever.from_persist_dirs(
+            vector_dir=vector_dir,
+            bm25_dir=bm25_dir,
+            top_k=top_k
+        )
+
+        # 执行检索
+        results = retriever.retrieve(query, mode=mode)
+
+        # 转换为字典格式
+        output = []
+        for i, node_with_score in enumerate(results, 1):
+            node = node_with_score.node
+            output.append({
+                "rank": i,
+                "score": round(node_with_score.score or 0.0, 4),
+                "text": node.text[:200] + "..." if len(node.text) > 200 else node.text,
+                "metadata": node.metadata,
+                "node_id": node.node_id
+            })
+
+        logger.info(f"Query returned {len(output)} results for source: {name}")
+        return output
+
+    def _build_indexes(self, name: str, doc_dir: Path) -> List[str]:
+        """构建索引
+
+        Args:
+            name: 数据源名称
+            doc_dir: 文档目录
+
+        Returns:
+            错误列表
+        """
+        errors = []
+
+        try:
+            # 加载所有文档
+            documents = []
+            for doc_file in doc_dir.glob("*.json"):
+                try:
+                    doc_json = doc_file.read_text(encoding="utf-8")
+                    doc = Document.from_json(doc_json)
+                    documents.append(doc)
+                except Exception as e:
+                    error_msg = f"Failed to load document {doc_file.name}: {e}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+
+            if not documents:
+                logger.warning("No documents to index")
+                return errors
+
+            logger.info(f"Loaded {len(documents)} documents for indexing")
+
+            # 构建向量索引
+            try:
+                vector_indexer = VectorIndexer()
+                vector_dir = self.paths.indexes(name) / "vector"
+                vector_indexer.build_index(documents, vector_dir)
+                logger.info("Vector index built successfully")
+            except Exception as e:
+                error_msg = f"Failed to build vector index: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+            # 构建 BM25 索引
+            try:
+                bm25_indexer = BM25Indexer()
+                bm25_dir = self.paths.indexes(name) / "bm25"
+                bm25_indexer.build_index(documents, bm25_dir)
+                logger.info("BM25 index built successfully")
+            except Exception as e:
+                error_msg = f"Failed to build BM25 index: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+        except Exception as e:
+            error_msg = f"Failed to build indexes: {e}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+
+        return errors
+
     def _create_source(self, config: SourceConfig) -> BaseDataSource:
         """创建数据源实例
 
@@ -243,10 +381,12 @@ class SourceManager:
                 raise ValueError("本地文件数据源必须指定 path")
             return LocalDataSource(config)
         elif config.type == SourceType.JIRA:
-            # TODO: 实现 JiraDataSource
-            raise NotImplementedError("Jira 数据源尚未实现")
+            if not config.server:
+                raise ValueError("Jira 数据源必须指定 server")
+            return JiraDataSource(config)
         elif config.type == SourceType.CONFLUENCE:
-            # TODO: 实现 ConfluenceDataSource
-            raise NotImplementedError("Confluence 数据源尚未实现")
+            if not config.server:
+                raise ValueError("Confluence 数据源必须指定 server")
+            return ConfluenceDataSource(config)
         else:
             raise ValueError(f"不支持的数据源类型: {config.type}")

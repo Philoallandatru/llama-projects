@@ -36,12 +36,16 @@ def cli(ctx, data_dir):
 @click.option('--type', 'source_type', type=click.Choice(['local', 'jira', 'confluence']), required=True, help='数据源类型')
 @click.option('--path', type=str, help='本地路径（local 类型必需）')
 @click.option('--server', type=str, help='服务器地址（jira/confluence 类型必需）')
-@click.option('--username', type=str, help='用户名')
-@click.option('--password', type=str, help='密码或 API Token')
+@click.option('--email', type=str, help='用户邮箱（jira/confluence 认证）')
+@click.option('--token', type=str, help='API Token（jira/confluence 认证）')
+@click.option('--project', type=str, help='项目 key（jira）')
+@click.option('--jql', type=str, help='JQL 查询语句（jira）')
+@click.option('--space', type=str, help='Space key（confluence）')
 @click.option('--description', type=str, help='数据源描述')
 @click.pass_context
 def add(ctx, name: str, source_type: str, path: Optional[str], server: Optional[str],
-        username: Optional[str], password: Optional[str], description: Optional[str]):
+        email: Optional[str], token: Optional[str], project: Optional[str],
+        jql: Optional[str], space: Optional[str], description: Optional[str]):
     """添加数据源
 
     示例：
@@ -52,7 +56,11 @@ def add(ctx, name: str, source_type: str, path: Optional[str], server: Optional[
 
     \b
     # 添加 Jira 数据源
-    datasource add my_jira --type jira --server https://jira.example.com --username user --password token
+    datasource add my_jira --type jira --server https://jira.example.com --email user@example.com --token YOUR_TOKEN --project PROJ
+
+    \b
+    # 添加 Confluence 数据源
+    datasource add my_confluence --type confluence --server https://confluence.example.com --email user@example.com --token YOUR_TOKEN --space SPACE
     """
     manager: SourceManager = ctx.obj['manager']
 
@@ -61,24 +69,30 @@ def add(ctx, name: str, source_type: str, path: Optional[str], server: Optional[
         if source_type == 'local' and not path:
             raise click.UsageError("本地文件数据源必须指定 --path")
 
-        if source_type in ['jira', 'confluence'] and not server:
-            raise click.UsageError(f"{source_type} 数据源必须指定 --server")
+        if source_type in ['jira', 'confluence']:
+            if not server:
+                raise click.UsageError(f"{source_type} 数据源必须指定 --server")
+            if not email or not token:
+                raise click.UsageError(f"{source_type} 数据源必须指定 --email 和 --token")
 
         # 构建配置
-        credentials = None
-        if username and password:
-            credentials = {
-                'username': username,
-                'password': password
-            }
+        options = {}
+        if email:
+            options['email'] = email
+        if token:
+            options['token'] = token
 
         config = SourceConfig(
             name=name,
             type=SourceType(source_type.upper()),
             path=path,
             server=server,
-            credentials=credentials,
-            description=description
+            project=project,
+            jql=jql,
+            space=space,
+            cql=cql,
+            description=description,
+            options=options
         )
 
         # 添加数据源
@@ -90,6 +104,8 @@ def add(ctx, name: str, source_type: str, path: Optional[str], server: Optional[
             click.echo(f"  路径: {path}")
         if server:
             click.echo(f"  服务器: {server}")
+        if project:
+            click.echo(f"  项目: {project}")
 
     except Exception as e:
         click.echo(f"✗ 添加失败: {e}", err=True)
@@ -206,7 +222,7 @@ def delete(ctx, name: str, yes: bool):
 def sync(ctx, name: str):
     """同步数据源
 
-    从数据源抓取数据并构建文档。
+    从数据源抓取数据并构建索引。
     """
     manager: SourceManager = ctx.obj['manager']
 
@@ -235,6 +251,65 @@ def sync(ctx, name: str):
 
     except Exception as e:
         click.echo(f"✗ 同步失败: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument('name')
+@click.argument('query')
+@click.option('--mode', type=click.Choice(['hybrid', 'vector', 'bm25']), default='hybrid', help='检索模式')
+@click.option('--top-k', type=int, default=5, help='返回结果数量')
+@click.pass_context
+def query(ctx, name: str, query: str, mode: str, top_k: int):
+    """查询数据源
+
+    使用混合检索（向量 + BM25）查询数据源。
+
+    示例：
+
+    \b
+    # 混合检索
+    datasource query my_docs "如何使用 Python"
+
+    \b
+    # 仅向量检索
+    datasource query my_docs "如何使用 Python" --mode vector
+
+    \b
+    # 返回更多结果
+    datasource query my_docs "如何使用 Python" --top-k 10
+    """
+    manager: SourceManager = ctx.obj['manager']
+
+    try:
+        click.echo(f"正在查询数据源 '{name}'...")
+        click.echo(f"查询: {query}")
+        click.echo(f"模式: {mode}")
+        click.echo()
+
+        results = manager.query(name, query, mode=mode, top_k=top_k)
+
+        if not results:
+            click.echo("没有找到相关结果")
+            return
+
+        click.echo(f"找到 {len(results)} 个结果:\n")
+
+        for result in results:
+            click.echo(f"#{result['rank']} (分数: {result['score']})")
+            click.echo(f"  {result['text']}")
+
+            # 显示元数据
+            metadata = result['metadata']
+            if 'source_name' in metadata:
+                click.echo(f"  来源: {metadata['source_name']}")
+            if 'item_id' in metadata:
+                click.echo(f"  ID: {metadata['item_id']}")
+
+            click.echo()
+
+    except Exception as e:
+        click.echo(f"✗ 查询失败: {e}", err=True)
         raise click.Abort()
 
 

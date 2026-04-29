@@ -55,16 +55,18 @@
   - [x] 创建代码审查报告（PHASE5_REVIEW.md）
 
 ### 进行中
-- [ ] Phase 6: 高级功能
-  - [x] HTML 内容清理（BeautifulSoup）✅
-  - [ ] 增量同步（基于 lastModified）
-  - [ ] 异步抓取（asyncio + aiohttp）
-  - [ ] 代码重构和优化
-  - [ ] 附件下载和解析（可选）
+- [ ] Phase 7: chat 集成
 
 ### 待办
-- [ ] Phase 7: chat 集成
 - [ ] Phase 8: 文档和优化
+
+### 已完成
+- [x] **Phase 6: 高级功能** ✅
+  - [x] HTML 内容清理（BeautifulSoup）✅
+  - [x] 增量同步（基于 lastModified）✅
+  - [x] 异步抓取（asyncio + aiohttp）✅
+  - [x] 代码重构和优化（Paginator + RetryHandler）✅
+  - [ ] 附件下载和解析（暂缓，优先级低）
 
 ### 问题
 - 无

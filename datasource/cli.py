@@ -218,18 +218,27 @@ def delete(ctx, name: str, yes: bool):
 
 @cli.command()
 @click.argument('name')
+@click.option('--full', is_flag=True, help='强制全量同步（默认使用增量同步）')
 @click.pass_context
-def sync(ctx, name: str):
+def sync(ctx, name: str, full: bool):
     """同步数据源
 
     从数据源抓取数据并构建索引。
+
+    默认使用增量同步（只抓取上次同步后更新的数据）。
+    使用 --full 参数强制全量同步。
+
+    示例：
+        datasource sync my_source          # 增量同步
+        datasource sync my_source --full   # 全量同步
     """
     manager: SourceManager = ctx.obj['manager']
 
     try:
-        click.echo(f"开始同步数据源 '{name}'...")
+        sync_mode = "全量" if full else "增量"
+        click.echo(f"开始{sync_mode}同步数据源 '{name}'...")
 
-        result = manager.sync_source(name)
+        result = manager.sync_source(name, full=full)
 
         click.echo(f"\n同步完成:")
         click.echo(f"  原始数据: {result.raw_count} 条")

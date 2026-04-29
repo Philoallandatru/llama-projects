@@ -148,12 +148,17 @@ class TestSyncAndQueryWorkflow:
         manager.add_source(config)
         result1 = manager.sync_source(source_name)
 
-        # 再次同步
+        # 再次同步（增量同步，没有新文件）
         result2 = manager.sync_source(source_name)
 
-        # 两次同步结果应该一致
-        assert result1.raw_count == result2.raw_count
-        assert result1.document_count == result2.document_count
+        # 增量同步时，第二次同步应该返回 0（没有新文件）
+        assert result2.raw_count == 0
+        assert result2.document_count == 0
+
+        # 但总计数应该保持不变
+        info = manager.get_source_info(source_name)
+        assert info.raw_count == result1.raw_count
+        assert info.document_count == result1.document_count
 
     def test_query_top_k(self, manager, test_data_dir):
         """测试 top_k 参数"""

@@ -5,7 +5,7 @@
 
 import json
 from pathlib import Path
-from typing import Iterator, Tuple, Dict, Any
+from typing import Iterator, Tuple, Dict, Any, Optional
 from datetime import datetime
 
 from llama_index.core import Document
@@ -59,25 +59,38 @@ class LocalDataSource(BaseDataSource):
 
     def fetch_raw(
         self,
-        output_dir: Path
+        output_dir: Path,
+        since: Optional[str] = None
     ) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """扫描目录并保存文件元数据
 
         实现逻辑：
         1. 递归扫描目录
         2. 过滤支持的文件类型
-        3. 提取文件元数据
-        4. 保存为 JSON
+        3. 如果提供 since，只返回修改时间晚于 since 的文件
+        4. 提取文件元数据
+        5. 保存为 JSON
 
         Args:
             output_dir: 原始数据保存目录
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Yields:
             (item_id, raw_data) 元组
             - item_id: 相对路径（用 / 分隔，去掉扩展名）
             - raw_data: 文件元数据
         """
+        from datetime import datetime
+
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 解析 since 时间戳
+        since_dt = None
+        if since:
+            try:
+                since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+            except ValueError:
+                logger.warning(f"Invalid since timestamp: {since}, performing full sync")
 
         # 递归扫描目录
         for file_path in self.root_path.rglob('*'):
@@ -86,6 +99,12 @@ class LocalDataSource(BaseDataSource):
                 continue
             if file_path.suffix.lower() not in self.SUPPORTED_EXTENSIONS:
                 continue
+
+            # 增量同步：检查文件修改时间
+            if since_dt:
+                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                if file_mtime < since_dt:
+                    continue  # 跳过未修改的文件
 
             # 计算相对路径作为 item_id
             rel_path = file_path.relative_to(self.root_path)

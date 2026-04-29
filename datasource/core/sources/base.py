@@ -35,7 +35,8 @@ class BaseDataSource(ABC):
     @abstractmethod
     def fetch_raw(
         self,
-        output_dir: Path
+        output_dir: Path,
+        since: Optional[str] = None
     ) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """抓取原始数据并保存
 
@@ -43,9 +44,12 @@ class BaseDataSource(ABC):
         1. 从数据源抓取原始数据（API 调用、文件扫描等）
         2. 将每个条目保存为 JSON 文件：output_dir / f"{item_id}.json"
         3. yield (item_id, raw_data) 供后续处理
+        4. 如果提供 since 参数，只抓取该时间后更新的数据（增量同步）
 
         Args:
             output_dir: 原始数据保存目录
+            since: 增量同步起始时间（ISO 8601 格式，如 "2026-04-29T10:30:00Z"）
+                   None 表示全量同步
 
         Yields:
             (item_id, raw_data) 元组
@@ -53,9 +57,13 @@ class BaseDataSource(ABC):
             - raw_data: 原始数据字典
 
         示例：
+            >>> # 全量同步
             >>> for item_id, raw_data in source.fetch_raw(output_dir):
             ...     print(f"Fetched {item_id}")
-            ...     # raw_data 已自动保存到 output_dir/{item_id}.json
+
+            >>> # 增量同步（只抓取 2026-04-29 之后更新的数据）
+            >>> for item_id, raw_data in source.fetch_raw(output_dir, since="2026-04-29T00:00:00Z"):
+            ...     print(f"Fetched updated {item_id}")
         """
         pass
 

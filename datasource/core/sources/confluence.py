@@ -74,27 +74,31 @@ class ConfluenceDataSource(BaseDataSource):
 
         logger.info(f"ConfluenceDataSource initialized: server={self.server}, space={self.space_key}")
 
-    def fetch_raw(self, output_dir: Path) -> int:
+    def fetch_raw(
+        self,
+        output_dir: Path,
+        since: Optional[str] = None
+    ) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """抓取原始数据
 
         Args:
             output_dir: 输出目录
+            since: 增量同步起始时间（ISO 8601 格式）
 
-        Returns:
-            抓取的文档数量
+        Yields:
+            (page_id, raw_data) 元组
         """
         output_dir.mkdir(parents=True, exist_ok=True)
-        count = 0
 
         try:
             # 获取 Pages
             if self.space_key:
-                pages = self._fetch_pages_by_space(self.space_key)
+                pages = self._fetch_pages_by_space(self.space_key, since)
             elif self.cql:
-                pages = self._fetch_pages_by_cql(self.cql)
+                pages = self._fetch_pages_by_cql(self.cql, since)
             else:
                 logger.warning("未指定 space 或 cql，将获取所有可访问的 pages")
-                pages = self._fetch_all_pages()
+                pages = self._fetch_all_pages(since)
 
             # 保存每个 Page
             for page in pages:
@@ -105,27 +109,32 @@ class ConfluenceDataSource(BaseDataSource):
 
                 # 保存原始数据
                 output_file = output_dir / f"page_{page_id}.json"
-                output_file.write_text(json.dumps(page_detail, ensure_ascii=False, indent=2))
+                output_file.write_text(json.dumps(page_detail, ensure_ascii=False, indent=2), encoding="utf-8")
 
-                count += 1
                 logger.info(f"Fetched page: {page_detail.get('title')} (ID: {page_id})")
 
-            logger.info(f"Total pages fetched: {count}")
-            return count
+                yield page_id, page_detail
 
         except Exception as e:
             logger.error(f"Error fetching Confluence data: {e}")
             raise
 
-    def _fetch_pages_by_space(self, space_key: str) -> list:
+    def _fetch_pages_by_space(self, space_key: str, since: Optional[str] = None) -> list:
         """通过 Space Key 获取 Pages
 
         Args:
             space_key: Space key
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Returns:
             Page 列表
         """
+        # 如果有 since，使用 CQL 查询
+        if since:
+            cql = f"space={space_key} AND lastModified >= '{since}'"
+            return self._fetch_pages_by_cql(cql, since=None)  # since 已在 CQL 中
+
+        # 否则使用标准 API
         pages = []
         start = 0
 
@@ -156,15 +165,20 @@ class ConfluenceDataSource(BaseDataSource):
 
         return pages
 
-    def _fetch_pages_by_cql(self, cql: str) -> list:
+    def _fetch_pages_by_cql(self, cql: str, since: Optional[str] = None) -> list:
         """通过 CQL 查询获取 Pages
 
         Args:
             cql: CQL 查询语句
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Returns:
             Page 列表
         """
+        # 添加时间过滤
+        if since:
+            cql = f"({cql}) AND lastModified >= '{since}'"
+
         pages = []
         start = 0
 
@@ -192,12 +206,20 @@ class ConfluenceDataSource(BaseDataSource):
 
         return pages
 
-    def _fetch_all_pages(self) -> list:
+    def _fetch_all_pages(self, since: Optional[str] = None) -> list:
         """获取所有可访问的 Pages
+
+        Args:
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Returns:
             Page 列表
         """
+        # 如果有 since，使用 CQL 查询
+        if since:
+            cql = f"type=page AND lastModified >= '{since}'"
+            return self._fetch_pages_by_cql(cql, since=None)  # since 已在 CQL 中
+
         pages = []
         start = 0
 

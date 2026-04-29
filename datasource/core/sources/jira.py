@@ -77,43 +77,73 @@ class JiraDataSource(BaseDataSource):
 
         logger.info(f"JiraDataSource initialized: server={self.server}, jql={self.jql}")
 
-    def _build_jql(self, config: "SourceConfig") -> str:
+    def _build_jql(self, config: "SourceConfig", since: Optional[str] = None) -> str:
         """构建 JQL 查询语句
 
         Args:
             config: 数据源配置
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Returns:
             JQL 查询字符串
         """
+        # 基础 JQL
+        base_jql = ""
+
         # 如果直接提供了 JQL，使用它
         if config.jql:
-            return config.jql
-
+            base_jql = config.jql
         # 否则根据 project 构建
-        if config.project:
-            return f"project = {config.project} ORDER BY created DESC"
+        elif config.project:
+            base_jql = f"project = {config.project}"
 
-        # 默认查询所有
-        return "ORDER BY created DESC"
+        # 添加增量同步时间过滤
+        if since:
+            # 将 ISO 8601 格式转换为 Jira 格式 (YYYY-MM-DD HH:mm)
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                jira_time = dt.strftime('%Y-%m-%d %H:%M')
 
-    def fetch_raw(self, output_dir: Path) -> Iterator[Tuple[str, Dict[str, Any]]]:
+                time_filter = f"updated >= '{jira_time}'"
+
+                if base_jql:
+                    base_jql = f"({base_jql}) AND {time_filter}"
+                else:
+                    base_jql = time_filter
+            except ValueError:
+                logger.warning(f"Invalid since timestamp: {since}, ignoring time filter")
+
+        # 添加排序
+        if base_jql:
+            return f"{base_jql} ORDER BY updated DESC"
+        else:
+            return "ORDER BY updated DESC"
+
+    def fetch_raw(
+        self,
+        output_dir: Path,
+        since: Optional[str] = None
+    ) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """抓取 Jira Issues
 
         Args:
             output_dir: 原始数据保存目录
+            since: 增量同步起始时间（ISO 8601 格式）
 
         Yields:
             (issue_key, raw_data) 元组
         """
-        logger.info(f"Starting Jira fetch with JQL: {self.jql}")
+        # 构建 JQL（包含时间过滤）
+        jql = self._build_jql(self.config, since)
+        logger.info(f"Starting Jira fetch with JQL: {jql}")
 
         start_at = 0
         total_fetched = 0
 
         while True:
             # 获取一页 issues
-            issues = self._fetch_issues_page(start_at)
+            issues = self._fetch_issues_page(start_at, jql)
 
             if not issues:
                 break
@@ -149,18 +179,19 @@ class JiraDataSource(BaseDataSource):
 
         logger.info(f"Jira fetch completed: {total_fetched} issues")
 
-    def _fetch_issues_page(self, start_at: int) -> list:
+    def _fetch_issues_page(self, start_at: int, jql: Optional[str] = None) -> list:
         """获取一页 issues
 
         Args:
             start_at: 起始位置
+            jql: JQL 查询语句（如果为 None，使用 self.jql）
 
         Returns:
             Issue 列表
         """
         url = f"{self.server}/rest/api/2/search"
         params = {
-            "jql": self.jql,
+            "jql": jql if jql is not None else self.jql,
             "startAt": start_at,
             "maxResults": self.max_results,
             "fields": "summary,description,status,priority,assignee,reporter,created,updated"

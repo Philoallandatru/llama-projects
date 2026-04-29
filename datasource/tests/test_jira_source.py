@@ -63,7 +63,7 @@ class TestJiraDataSource:
         assert source.server == "https://jira.example.com"
         assert source.email == "test@example.com"
         assert source.token == "test_token"
-        assert source.jql == "project = TEST ORDER BY created DESC"
+        assert source.jql == "project = TEST ORDER BY updated DESC"
 
     def test_init_without_server(self):
         """测试缺少 server 参数"""
@@ -103,7 +103,7 @@ class TestJiraDataSource:
     def test_build_jql_with_project(self, jira_config):
         """测试使用 project 构建 JQL"""
         source = JiraDataSource(jira_config)
-        assert source.jql == "project = TEST ORDER BY created DESC"
+        assert source.jql == "project = TEST ORDER BY updated DESC"
 
     def test_build_jql_with_custom_jql(self):
         """测试使用自定义 JQL"""
@@ -116,7 +116,7 @@ class TestJiraDataSource:
         )
 
         source = JiraDataSource(config)
-        assert source.jql == "status = Open AND priority = High"
+        assert source.jql == "status = Open AND priority = High ORDER BY updated DESC"
 
     @patch('datasource.core.sources.jira.requests.Session')
     def test_fetch_issues_page(self, mock_session, jira_config, mock_issue_response):

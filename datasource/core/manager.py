@@ -145,16 +145,17 @@ class SourceManager:
             status=manifest.get("status", "未同步") if manifest else "未同步"
         )
 
-    def sync_source(self, name: str) -> SyncResult:
+    def sync_source(self, name: str, full: bool = False) -> SyncResult:
         """同步数据源
 
         执行流程：
-        1. fetch_raw() - 抓取原始数据
+        1. fetch_raw() - 抓取原始数据（支持增量同步）
         2. build_document() - 构建文档
         3. 保存 manifest
 
         Args:
             name: 数据源名称
+            full: 是否强制全量同步（默认 False，使用增量同步）
 
         Returns:
             SyncResult: 同步结果
@@ -173,10 +174,23 @@ class SourceManager:
         source = self._create_source(config)
 
         # 执行同步
-        logger.info(f"Starting sync for source: {name}")
-
         from datetime import datetime
         import json
+
+        # 读取上次同步时间（用于增量同步）
+        manifest_path = self.paths.manifest(name)
+        last_sync_time = None
+        if not full and manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                last_sync_time = manifest.get("last_sync")
+                if last_sync_time:
+                    logger.info(f"Incremental sync from: {last_sync_time}")
+            except Exception as e:
+                logger.warning(f"Failed to read last sync time: {e}, performing full sync")
+
+        sync_mode = "full" if full or not last_sync_time else "incremental"
+        logger.info(f"Starting {sync_mode} sync for source: {name}")
 
         raw_count = 0
         doc_count = 0
@@ -188,7 +202,9 @@ class SourceManager:
             doc_dir = self.paths.documents(name)
             assets_dir = self.paths.assets(name)
 
-            for item_id, raw_data in source.fetch_raw(raw_dir):
+            # 传递 since 参数进行增量同步
+            since = None if full else last_sync_time
+            for item_id, raw_data in source.fetch_raw(raw_dir, since=since):
                 raw_count += 1
 
                 try:
@@ -211,8 +227,11 @@ class SourceManager:
             errors.extend(index_errors)
 
             # 保存 manifest
+            current_time = datetime.now().isoformat()
             manifest = {
-                "last_sync": datetime.now().isoformat(),
+                "last_sync": current_time,
+                "last_full_sync": current_time if full else manifest.get("last_full_sync", current_time) if manifest_path.exists() and not full else current_time,
+                "sync_mode": sync_mode,
                 "status": "已同步" if not errors else "部分失败",
                 "raw_count": raw_count,
                 "document_count": doc_count,
@@ -220,7 +239,6 @@ class SourceManager:
                 "errors": errors[:10]  # 只保留前10个错误
             }
 
-            manifest_path = self.paths.manifest(name)
             manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
             result = SyncResult(

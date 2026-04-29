@@ -92,9 +92,9 @@ class TestConfluenceFetchRaw:
 
         mock_request.return_value = mock_pages_response
 
-        count = confluence_source.fetch_raw(tmp_path)
+        results = list(confluence_source.fetch_raw(tmp_path))
 
-        assert count == 0
+        assert len(results) == 0
         assert mock_request.call_count >= 1
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
@@ -134,12 +134,9 @@ class TestConfluenceFetchRaw:
 
         mock_request.side_effect = [mock_pages_response, mock_page_detail]
 
-        count = confluence_source.fetch_raw(tmp_path)
+        results = list(confluence_source.fetch_raw(tmp_path))
 
-        assert count == 1
-        assert (tmp_path / "page_123.json").exists()
-
-        assert count == 1
+        assert len(results) == 1
         assert (tmp_path / "page_123.json").exists()
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
@@ -171,9 +168,9 @@ class TestConfluenceFetchRaw:
 
         mock_request.side_effect = [mock_page1, mock_detail1, mock_page2]
 
-        count = confluence_source.fetch_raw(tmp_path)
+        results = list(confluence_source.fetch_raw(tmp_path))
 
-        assert count == 1
+        assert len(results) == 1
         assert (tmp_path / "page_1.json").exists()
 
 
@@ -255,11 +252,11 @@ class TestConfluenceRetryAndRateLimit:
 
         mock_request.side_effect = [mock_fail, mock_success]
 
-        count = confluence_source.fetch_raw(tmp_path)
+        results = list(confluence_source.fetch_raw(tmp_path))
 
         # 验证有重试延迟
         assert mock_sleep.called
-        assert count == 0
+        assert len(results) == 0
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
     @patch('datasource.core.sources.confluence.time.sleep')
@@ -298,8 +295,8 @@ class TestConfluenceAttachments:
 
         mock_request.return_value = mock_response
 
-        count = confluence_source.fetch_raw(tmp_path)
-        assert count == 0
+        results = list(confluence_source.fetch_raw(tmp_path))
+        assert len(results) == 0
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
     def test_skip_non_text_attachments(self, mock_request, confluence_source, tmp_path):
@@ -314,6 +311,6 @@ class TestConfluenceAttachments:
 
         mock_request.return_value = mock_response
 
-        count = confluence_source.fetch_raw(tmp_path)
-        assert count == 0
+        results = list(confluence_source.fetch_raw(tmp_path))
+        assert len(results) == 0
 

@@ -105,80 +105,14 @@ class SyncResult(BaseModel):
     记录一次同步操作的完整信息，包括统计数据和错误信息。
     """
 
-    source_name: str = Field(..., description="数据源名称")
-    status: str = Field(..., description="同步状态：success | partial | failed")
-    started_at: datetime = Field(..., description="开始时间")
-    completed_at: datetime = Field(..., description="完成时间")
-    duration_seconds: float = Field(..., description="耗时（秒）")
-
-    # 统计信息
-    total_items: int = Field(0, description="总条目数")
-    successful_items: int = Field(0, description="成功条目数")
-    failed_items: int = Field(0, description="失败条目数")
-    total_documents: int = Field(0, description="总文档数")
-    total_assets: int = Field(0, description="总资源数（附件）")
-
-    # 索引统计
-    total_nodes: int = Field(0, description="索引节点数")
-    index_size_mb: float = Field(0.0, description="索引大小（MB）")
-
-    # 错误信息
-    errors: List[Dict[str, Any]] = Field(
+    success: bool = Field(..., description="是否成功")
+    raw_count: int = Field(0, description="原始数据条目数")
+    document_count: int = Field(0, description="文档数")
+    error_count: int = Field(0, description="错误数")
+    errors: List[str] = Field(
         default_factory=list,
-        description="错误列表，每个错误包含 item_id 和 error"
+        description="错误信息列表"
     )
-
-    def to_markdown(self) -> str:
-        """生成 Markdown 格式的同步报告
-
-        Returns:
-            Markdown 格式的报告字符串
-        """
-        status_emoji = {
-            "success": "✅",
-            "partial": "⚠️",
-            "failed": "❌",
-        }
-
-        report = f"""# Sync Report: {self.source_name}
-
-## Summary
-- Status: {status_emoji.get(self.status, "❓")} {self.status}
-- Duration: {self.duration_seconds:.2f}s
-- Started: {self.started_at.strftime("%Y-%m-%d %H:%M:%S")}
-- Completed: {self.completed_at.strftime("%Y-%m-%d %H:%M:%S")}
-
-## Statistics
-- Total items: {self.total_items}
-- Successful: {self.successful_items}
-- Failed: {self.failed_items}
-- Documents: {self.total_documents}
-- Assets: {self.total_assets}
-
-## Index
-- Nodes: {self.total_nodes}
-- Size: {self.index_size_mb:.2f} MB
-
-## Errors
-{self._format_errors()}
-"""
-        return report
-
-    def _format_errors(self) -> str:
-        """格式化错误列表"""
-        if not self.errors:
-            return "No errors ✅"
-
-        lines = []
-        for i, error in enumerate(self.errors[:10], 1):  # 只显示前 10 个
-            item_id = error.get("item_id", "unknown")
-            error_msg = error.get("error", "unknown error")
-            lines.append(f"{i}. **{item_id}**: {error_msg}")
-
-        if len(self.errors) > 10:
-            lines.append(f"\n... and {len(self.errors) - 10} more errors")
-
-        return "\n".join(lines)
 
 
 # ============ 数据源信息 ============
@@ -190,20 +124,20 @@ class SourceInfo(BaseModel):
     包含配置和运行时统计信息。
     """
 
+    name: str = Field(..., description="数据源名称")
+    type: SourceType = Field(..., description="数据源类型")
     config: SourceConfig = Field(..., description="数据源配置")
 
     # 统计信息
-    total_items: int = Field(0, description="总条目数")
-    total_documents: int = Field(0, description="总文档数")
-    total_assets: int = Field(0, description="总资源数")
-    total_nodes: int = Field(0, description="索引节点数")
-    index_size_mb: float = Field(0.0, description="索引大小（MB）")
+    raw_count: int = Field(0, description="原始数据条目数")
+    document_count: int = Field(0, description="文档数")
+    total_size: float = Field(0.0, description="总大小（MB）")
 
     # 状态
-    last_sync: Optional[datetime] = Field(None, description="最后同步时间")
+    last_sync: Optional[str] = Field(None, description="最后同步时间（ISO格式）")
     status: str = Field(
-        "not_synced",
-        description="状态：not_synced | syncing | ready | error"
+        "未同步",
+        description="状态：未同步 | 同步中 | 已同步 | 同步失败"
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -213,16 +147,14 @@ class SourceInfo(BaseModel):
             包含所有信息的字典
         """
         return {
-            "name": self.config.name,
-            "type": self.config.type.value,
+            "name": self.name,
+            "type": self.type.value,
             "server": self.config.server,
             "path": self.config.path,
             "description": self.config.description,
-            "items": self.total_items,
-            "documents": self.total_documents,
-            "assets": self.total_assets,
-            "nodes": self.total_nodes,
-            "index_size_mb": round(self.index_size_mb, 2),
-            "last_sync": self.last_sync.isoformat() if self.last_sync else None,
+            "raw_count": self.raw_count,
+            "document_count": self.document_count,
+            "total_size_mb": round(self.total_size, 2),
+            "last_sync": self.last_sync,
             "status": self.status,
         }

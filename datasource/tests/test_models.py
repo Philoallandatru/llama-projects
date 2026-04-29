@@ -160,130 +160,47 @@ class TestSyncResult:
 
     def test_create_sync_result(self):
         """测试创建同步结果"""
-        started = datetime.now()
-        completed = datetime.now()
-
         result = SyncResult(
-            source_name="test",
-            status="success",
-            started_at=started,
-            completed_at=completed,
-            duration_seconds=10.5
+            success=True,
+            raw_count=100,
+            document_count=95,
+            error_count=5,
+            errors=["Error 1", "Error 2"]
         )
 
-        assert result.source_name == "test"
-        assert result.status == "success"
-        assert result.started_at == started
-        assert result.completed_at == completed
-        assert result.duration_seconds == 10.5
+        assert result.success is True
+        assert result.raw_count == 100
+        assert result.document_count == 95
+        assert result.error_count == 5
+        assert len(result.errors) == 2
 
     def test_default_statistics(self):
         """测试默认统计值"""
         result = SyncResult(
-            source_name="test",
-            status="success",
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            duration_seconds=0
+            success=True
         )
 
-        assert result.total_items == 0
-        assert result.successful_items == 0
-        assert result.failed_items == 0
-        assert result.total_documents == 0
-        assert result.total_assets == 0
-        assert result.total_nodes == 0
-        assert result.index_size_mb == 0.0
+        assert result.raw_count == 0
+        assert result.document_count == 0
+        assert result.error_count == 0
         assert result.errors == []
-
-    def test_with_statistics(self):
-        """测试带统计信息"""
-        result = SyncResult(
-            source_name="test",
-            status="partial",
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            duration_seconds=60.0,
-            total_items=100,
-            successful_items=95,
-            failed_items=5,
-            total_documents=95,
-            total_assets=50,
-            total_nodes=500,
-            index_size_mb=10.5
-        )
-
-        assert result.total_items == 100
-        assert result.successful_items == 95
-        assert result.failed_items == 5
-        assert result.total_documents == 95
-        assert result.total_assets == 50
-        assert result.total_nodes == 500
-        assert result.index_size_mb == 10.5
 
     def test_with_errors(self):
         """测试带错误信息"""
-        errors = [
-            {"item_id": "item1", "error": "Error 1"},
-            {"item_id": "item2", "error": "Error 2"},
-        ]
+        errors = ["Error 1", "Error 2", "Error 3"]
 
         result = SyncResult(
-            source_name="test",
-            status="failed",
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            duration_seconds=5.0,
+            success=False,
+            raw_count=10,
+            document_count=7,
+            error_count=3,
             errors=errors
         )
 
-        assert len(result.errors) == 2
-        assert result.errors[0]["item_id"] == "item1"
-        assert result.errors[1]["error"] == "Error 2"
-
-    def test_to_markdown(self):
-        """测试生成 Markdown 报告"""
-        result = SyncResult(
-            source_name="test",
-            status="success",
-            started_at=datetime(2024, 1, 1, 10, 0, 0),
-            completed_at=datetime(2024, 1, 1, 10, 5, 0),
-            duration_seconds=300.0,
-            total_items=100,
-            successful_items=100,
-            total_nodes=500,
-            index_size_mb=10.5
-        )
-
-        markdown = result.to_markdown()
-
-        assert "# Sync Report: test" in markdown
-        assert "✅ success" in markdown
-        assert "Duration: 300.00s" in markdown
-        assert "Total items: 100" in markdown
-        assert "Nodes: 500" in markdown
-        assert "Size: 10.50 MB" in markdown
-        assert "No errors ✅" in markdown
-
-    def test_markdown_with_errors(self):
-        """测试带错误的 Markdown 报告"""
-        errors = [{"item_id": f"item{i}", "error": f"Error {i}"} for i in range(15)]
-
-        result = SyncResult(
-            source_name="test",
-            status="partial",
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            duration_seconds=10.0,
-            errors=errors
-        )
-
-        markdown = result.to_markdown()
-
-        assert "⚠️ partial" in markdown
-        assert "item0" in markdown
-        assert "item9" in markdown
-        assert "and 5 more errors" in markdown  # 只显示前 10 个
+        assert result.success is False
+        assert result.error_count == 3
+        assert len(result.errors) == 3
+        assert result.errors[0] == "Error 1"
 
 
 class TestSourceInfo:
@@ -297,12 +214,20 @@ class TestSourceInfo:
             path="/tmp"
         )
 
-        info = SourceInfo(config=config)
+        info = SourceInfo(
+            name="test",
+            type=SourceType.LOCAL,
+            config=config
+        )
 
-        assert info.config.name == "test"
-        assert info.total_items == 0
-        assert info.status == "not_synced"
+        assert info.name == "test"
+        assert info.type == SourceType.LOCAL
+        assert info.config == config
+        assert info.raw_count == 0
+        assert info.document_count == 0
+        assert info.total_size == 0.0
         assert info.last_sync is None
+        assert info.status == "未同步"
 
     def test_with_statistics(self):
         """测试带统计信息"""
@@ -312,58 +237,54 @@ class TestSourceInfo:
             path="/tmp"
         )
 
-        last_sync = datetime.now()
-
         info = SourceInfo(
+            name="test",
+            type=SourceType.LOCAL,
             config=config,
-            total_items=100,
-            total_documents=100,
-            total_assets=50,
-            total_nodes=500,
-            index_size_mb=10.5,
-            last_sync=last_sync,
-            status="ready"
+            raw_count=100,
+            document_count=95,
+            total_size=10.5,
+            last_sync="2026-04-29T10:00:00",
+            status="已同步"
         )
 
-        assert info.total_items == 100
-        assert info.total_documents == 100
-        assert info.total_assets == 50
-        assert info.total_nodes == 500
-        assert info.index_size_mb == 10.5
-        assert info.last_sync == last_sync
-        assert info.status == "ready"
+        assert info.raw_count == 100
+        assert info.document_count == 95
+        assert info.total_size == 10.5
+        assert info.last_sync == "2026-04-29T10:00:00"
+        assert info.status == "已同步"
 
     def test_to_dict(self):
         """测试转换为字典"""
         config = SourceConfig(
             name="test",
-            type=SourceType.JIRA,
-            server="https://jira.example.com",
-            description="Test Jira"
+            type=SourceType.LOCAL,
+            path="/tmp",
+            description="Test"
         )
 
-        last_sync = datetime(2024, 1, 1, 10, 0, 0)
-
         info = SourceInfo(
+            name="test",
+            type=SourceType.LOCAL,
             config=config,
-            total_items=100,
-            total_nodes=500,
-            index_size_mb=10.567,
-            last_sync=last_sync,
-            status="ready"
+            raw_count=100,
+            document_count=95,
+            total_size=10.567,
+            last_sync="2024-01-01T10:00:00",
+            status="已同步"
         )
 
         data = info.to_dict()
 
         assert data["name"] == "test"
-        assert data["type"] == "jira"
-        assert data["server"] == "https://jira.example.com"
-        assert data["description"] == "Test Jira"
-        assert data["items"] == 100
-        assert data["nodes"] == 500
-        assert data["index_size_mb"] == 10.57  # 四舍五入到 2 位
+        assert data["type"] == "local"
+        assert data["path"] == "/tmp"
+        assert data["description"] == "Test"
+        assert data["raw_count"] == 100
+        assert data["document_count"] == 95
+        assert data["total_size_mb"] == 10.57
         assert data["last_sync"] == "2024-01-01T10:00:00"
-        assert data["status"] == "ready"
+        assert data["status"] == "已同步"
 
     def test_to_dict_no_sync(self):
         """测试未同步的数据源"""
@@ -373,8 +294,12 @@ class TestSourceInfo:
             path="/tmp"
         )
 
-        info = SourceInfo(config=config)
+        info = SourceInfo(
+            name="test",
+            type=SourceType.LOCAL,
+            config=config
+        )
         data = info.to_dict()
 
         assert data["last_sync"] is None
-        assert data["status"] == "not_synced"
+        assert data["status"] == "未同步"

@@ -89,7 +89,7 @@ class TestJiraDataSource:
             JiraDataSource(config)
 
     def test_init_without_email(self):
-        """测试缺少 email 参数"""
+        """测试不提供 email 参数（email 是可选的）"""
         config = SourceConfig(
             name="test",
             type=SourceType.JIRA,
@@ -97,8 +97,10 @@ class TestJiraDataSource:
             options={"token": "token"}
         )
 
-        with pytest.raises(ValueError, match="必须在 options 中指定 email"):
-            JiraDataSource(config)
+        # email 是可选的，不应该抛出错误
+        source = JiraDataSource(config)
+        assert source.email == ""
+        assert source.token == "token"
 
     def test_build_jql_with_project(self, jira_config):
         """测试使用 project 构建 JQL"""

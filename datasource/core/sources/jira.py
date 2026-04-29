@@ -5,7 +5,6 @@
 
 import logging
 import json
-import time
 from pathlib import Path
 from typing import Iterator, Tuple, Dict, Any, Optional
 from datetime import datetime
@@ -16,6 +15,7 @@ from llama_index.core import Document
 
 from .base import BaseDataSource
 from ..utils.pagination import Paginator
+from ..utils.retry import RetryHandler
 
 logger = logging.getLogger(__name__)
 
@@ -51,22 +51,26 @@ class JiraDataSource(BaseDataSource):
 
         self.server = config.server.rstrip('/')
         self.token = config.options.get("token")
-        self.email = config.options.get("email")
+        self.email = config.options.get("email", "")  # email 可选，某些 Jira Server 不需要
 
         if not self.token:
             raise ValueError("Jira 数据源必须在 options 中指定 token")
-        if not self.email:
-            raise ValueError("Jira 数据源必须在 options 中指定 email")
 
         # 构建 JQL 查询
         self.jql = self._build_jql(config)
 
         # 配置选项
         self.max_results = config.options.get("max_results", 50)  # 每页结果数
-        self.max_retries = config.options.get("max_retries", 3)
-        self.retry_delay = config.options.get("retry_delay", 5)
         self.download_attachments = config.options.get("download_attachments", True)
         self.attachment_types = config.options.get("attachment_types", ["png", "jpg", "jpeg", "gif", "svg", "webp"])
+
+        # 创建重试处理器
+        self.retry_handler = RetryHandler(
+            max_retries=config.options.get("max_retries", 3),
+            base_delay=config.options.get("retry_delay", 5),
+            backoff_strategy="exponential",
+            handle_rate_limit=True
+        )
 
         # 创建 session
         self.session = requests.Session()
@@ -244,28 +248,10 @@ class JiraDataSource(BaseDataSource):
         Raises:
             requests.RequestException: 请求失败
         """
-        for attempt in range(self.max_retries):
-            try:
-                response = self.session.request(method, url, **kwargs)
+        def make_request():
+            return self.session.request(method, url, **kwargs)
 
-                # 处理 429 限流
-                if response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", self.retry_delay))
-                    logger.warning(f"Rate limited, waiting {retry_after}s...")
-                    time.sleep(retry_after)
-                    continue
-
-                # 检查其他错误
-                response.raise_for_status()
-                return response
-
-            except requests.RequestException as e:
-                if attempt < self.max_retries - 1:
-                    logger.warning(f"Request failed (attempt {attempt + 1}/{self.max_retries}): {e}")
-                    time.sleep(self.retry_delay)
-                else:
-                    logger.error(f"Request failed after {self.max_retries} attempts: {e}")
-                    raise
+        return self.retry_handler.execute(make_request)
 
     def build_document(
         self,

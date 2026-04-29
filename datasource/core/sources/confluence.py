@@ -5,7 +5,6 @@
 
 import logging
 import json
-import time
 from pathlib import Path
 from typing import Iterator, Tuple, Dict, Any, Optional
 from datetime import datetime
@@ -16,6 +15,7 @@ from llama_index.core import Document
 
 from .base import BaseDataSource
 from ..utils.pagination import Paginator
+from ..utils.retry import RetryHandler
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +61,15 @@ class ConfluenceDataSource(BaseDataSource):
 
         # 配置选项
         self.max_results = config.options.get("max_results", 50) if config.options else 50
-        self.max_retries = config.options.get("max_retries", 3) if config.options else 3
-        self.retry_delay = config.options.get("retry_delay", 5) if config.options else 5
         self.download_attachments = config.options.get("download_attachments", False) if config.options else False
+
+        # 创建重试处理器
+        self.retry_handler = RetryHandler(
+            max_retries=config.options.get("max_retries", 3) if config.options else 3,
+            base_delay=config.options.get("retry_delay", 5) if config.options else 5,
+            backoff_strategy="exponential",
+            handle_rate_limit=True
+        )
 
         # 创建 session
         self.session = requests.Session()
@@ -258,31 +264,10 @@ class ConfluenceDataSource(BaseDataSource):
         Raises:
             requests.RequestException: 请求失败
         """
-        for attempt in range(self.max_retries):
-            try:
-                response = self.session.request(method, url, params=params, **kwargs)
+        def make_request():
+            return self.session.request(method, url, params=params, **kwargs)
 
-                # 处理限流
-                if response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", self.retry_delay))
-                    logger.warning(f"Rate limited, waiting {retry_after}s...")
-                    time.sleep(retry_after)
-                    continue
-
-                response.raise_for_status()
-                return response
-
-            except requests.RequestException as e:
-                if attempt < self.max_retries - 1:
-                    delay = self.retry_delay * (2 ** attempt)
-                    logger.warning(f"Request failed (attempt {attempt + 1}/{self.max_retries}): {e}")
-                    logger.info(f"Retrying in {delay}s...")
-                    time.sleep(delay)
-                else:
-                    logger.error(f"Request failed after {self.max_retries} attempts: {e}")
-                    raise
-
-        raise requests.RequestException(f"Failed after {self.max_retries} retries")
+        return self.retry_handler.execute(make_request)
 
     def build_document(self, raw_file: Path, output_dir: Path) -> str:
         """将原始数据转换为 Document

@@ -238,7 +238,7 @@ class TestConfluenceRetryAndRateLimit:
     """测试重试和限流机制"""
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
-    @patch('datasource.core.sources.confluence.time.sleep')
+    @patch('datasource.core.utils.retry.time.sleep')
     def test_retry_on_failure(self, mock_sleep, mock_request, confluence_source, tmp_path):
         """测试失败重试"""
         # 第一次失败，第二次成功
@@ -259,7 +259,7 @@ class TestConfluenceRetryAndRateLimit:
         assert len(results) == 0
 
     @patch('datasource.core.sources.confluence.requests.Session.request')
-    @patch('datasource.core.sources.confluence.time.sleep')
+    @patch('datasource.core.utils.retry.time.sleep')
     def test_rate_limiting(self, mock_sleep, mock_request, confluence_source, tmp_path):
         """测试限流"""
         mock_response = Mock()

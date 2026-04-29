@@ -3,12 +3,14 @@
 支持从 Jira Server 抓取 Issues 和 Comments。
 """
 
+import asyncio
 import logging
 import json
 from pathlib import Path
-from typing import Iterator, Tuple, Dict, Any, Optional
+from typing import Iterator, Tuple, Dict, Any, Optional, List
 from datetime import datetime
 
+import aiohttp
 import requests
 from requests.auth import HTTPBasicAuth
 from llama_index.core import Document
@@ -16,6 +18,7 @@ from llama_index.core import Document
 from .base import BaseDataSource
 from ..utils.pagination import Paginator
 from ..utils.retry import RetryHandler
+from ..utils.async_http import AsyncHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -416,3 +419,187 @@ class JiraDataSource(BaseDataSource):
         for char in unsafe_chars:
             filename = filename.replace(char, '_')
         return filename
+
+    # ==================== 异步抓取方法 ====================
+
+    async def fetch_raw_async(
+        self,
+        output_dir: Path,
+        since: Optional[str] = None,
+        max_concurrent: int = 10
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """异步抓取 Jira Issues
+
+        Args:
+            output_dir: 原始数据保存目录
+            since: 增量同步起始时间（ISO 8601 格式）
+            max_concurrent: 最大并发请求数
+
+        Returns:
+            [(issue_key, raw_data), ...] 列表
+        """
+        # 构建 JQL（包含时间过滤）
+        jql = self._build_jql(self.config, since)
+        logger.info(f"Starting async Jira fetch with JQL: {jql}")
+
+        # 创建异步 HTTP 客户端
+        http_client = AsyncHTTPClient(
+            max_concurrent=max_concurrent,
+            max_retries=3,
+            retry_delay=1.0,
+            timeout=30
+        )
+
+        # 创建 aiohttp session（使用 BasicAuth）
+        auth = aiohttp.BasicAuth(self.email, self.token)
+        async with aiohttp.ClientSession(auth=auth) as session:
+            # 1. 获取 issue 列表
+            issue_keys = await self._fetch_issue_keys_async(
+                session, http_client, jql
+            )
+
+            if not issue_keys:
+                logger.info("No issues found")
+                return []
+
+            logger.info(f"Found {len(issue_keys)} issues, fetching details...")
+
+            # 2. 并发获取每个 issue 的详细信息
+            tasks = [
+                self._fetch_issue_detail_async(session, http_client, issue_key)
+                for issue_key in issue_keys
+            ]
+
+            results = await http_client.gather_with_concurrency(
+                tasks, return_exceptions=True
+            )
+
+            # 3. 处理结果并保存
+            fetched_issues = []
+            for issue_key, result in zip(issue_keys, results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to fetch issue {issue_key}: {result}")
+                    continue
+
+                try:
+                    # 保存原始数据
+                    issue_file = output_dir / f"{self._sanitize_filename(issue_key)}.json"
+                    issue_file.write_text(
+                        json.dumps(result, indent=2, ensure_ascii=False),
+                        encoding="utf-8"
+                    )
+
+                    fetched_issues.append((issue_key, result))
+                    logger.info(f"Fetched issue {issue_key} ({len(fetched_issues)}/{len(issue_keys)})")
+
+                except Exception as e:
+                    logger.error(f"Failed to save issue {issue_key}: {e}")
+                    continue
+
+            logger.info(f"Async Jira fetch completed: {len(fetched_issues)} issues")
+            return fetched_issues
+
+    async def _fetch_issue_keys_async(
+        self,
+        session: aiohttp.ClientSession,
+        http_client: AsyncHTTPClient,
+        jql: str
+    ) -> List[str]:
+        """异步获取所有 issue keys（分页）
+
+        Args:
+            session: aiohttp 会话
+            http_client: 异步 HTTP 客户端
+            jql: JQL 查询语句
+
+        Returns:
+            Issue key 列表
+        """
+        issue_keys = []
+        start_at = 0
+
+        while True:
+            url = f"{self.server}/rest/api/2/search"
+            params = {
+                "jql": jql,
+                "startAt": start_at,
+                "maxResults": self.max_results,
+                "fields": "key"  # 只获取 key，减少数据量
+            }
+
+            try:
+                data = await http_client.get_json(session, url, params=params)
+                issues = data.get("issues", [])
+
+                if not issues:
+                    break
+
+                # 提取 issue keys
+                for issue in issues:
+                    issue_keys.append(issue["key"])
+
+                # 检查是否还有更多数据
+                total = data.get("total", 0)
+                if start_at + len(issues) >= total:
+                    break
+
+                start_at += len(issues)
+
+            except Exception as e:
+                logger.error(f"Failed to fetch issue keys at offset {start_at}: {e}")
+                break
+
+        return issue_keys
+
+    async def _fetch_issue_detail_async(
+        self,
+        session: aiohttp.ClientSession,
+        http_client: AsyncHTTPClient,
+        issue_key: str
+    ) -> Dict[str, Any]:
+        """异步获取 issue 详细信息（包含 comments）
+
+        Args:
+            session: aiohttp 会话
+            http_client: 异步 HTTP 客户端
+            issue_key: Issue key (如 PROJ-123)
+
+        Returns:
+            完整的 issue 数据
+        """
+        url = f"{self.server}/rest/api/2/issue/{issue_key}"
+        params = {
+            "expand": "renderedFields,names,schema,transitions,operations,changelog,comments"
+        }
+
+        return await http_client.get_json(session, url, params=params)
+
+    def fetch_raw_sync_wrapper(
+        self,
+        output_dir: Path,
+        since: Optional[str] = None,
+        use_async: bool = True,
+        max_concurrent: int = 10
+    ) -> Iterator[Tuple[str, Dict[str, Any]]]:
+        """同步包装器，支持选择同步或异步模式
+
+        Args:
+            output_dir: 原始数据保存目录
+            since: 增量同步起始时间（ISO 8601 格式）
+            use_async: 是否使用异步模式（默认 True）
+            max_concurrent: 异步模式下的最大并发数
+
+        Yields:
+            (issue_key, raw_data) 元组
+        """
+        if use_async:
+            # 使用异步模式
+            results = asyncio.run(
+                self.fetch_raw_async(output_dir, since, max_concurrent)
+            )
+            # 转换为 Iterator
+            for item in results:
+                yield item
+        else:
+            # 使用原有的同步模式
+            yield from self.fetch_raw(output_dir, since)

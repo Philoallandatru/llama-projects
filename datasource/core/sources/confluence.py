@@ -15,6 +15,7 @@ from requests.auth import HTTPBasicAuth
 from llama_index.core import Document
 
 from .base import BaseDataSource
+from ..utils.pagination import Paginator
 
 logger = logging.getLogger(__name__)
 
@@ -134,36 +135,25 @@ class ConfluenceDataSource(BaseDataSource):
             cql = f"space={space_key} AND lastModified >= '{since}'"
             return self._fetch_pages_by_cql(cql, since=None)  # since 已在 CQL 中
 
-        # 否则使用标准 API
-        pages = []
-        start = 0
-
-        while True:
+        # 否则使用标准 API 和分页器
+        def fetch_func(start: int, limit: int) -> Dict[str, Any]:
             url = f"{self.server}/rest/api/content"
             params = {
                 "spaceKey": space_key,
                 "type": "page",
                 "status": "current",
-                "limit": self.max_results,
+                "limit": limit,
                 "start": start
             }
-
             response = self._make_request("GET", url, params=params)
-            data = response.json()
+            return response.json()
 
-            results = data.get("results", [])
-            if not results:
-                break
-
-            pages.extend(results)
-
-            # 检查是否有下一页
-            if data.get("size", 0) < self.max_results:
-                break
-
-            start += self.max_results
-
-        return pages
+        return Paginator.paginate(
+            fetch_func,
+            page_size=self.max_results,
+            results_key="results",
+            size_key="size"
+        )
 
     def _fetch_pages_by_cql(self, cql: str, since: Optional[str] = None) -> list:
         """通过 CQL 查询获取 Pages
@@ -179,32 +169,23 @@ class ConfluenceDataSource(BaseDataSource):
         if since:
             cql = f"({cql}) AND lastModified >= '{since}'"
 
-        pages = []
-        start = 0
-
-        while True:
+        # 使用分页器
+        def fetch_func(start: int, limit: int) -> Dict[str, Any]:
             url = f"{self.server}/rest/api/content/search"
             params = {
                 "cql": cql,
-                "limit": self.max_results,
+                "limit": limit,
                 "start": start
             }
-
             response = self._make_request("GET", url, params=params)
-            data = response.json()
+            return response.json()
 
-            results = data.get("results", [])
-            if not results:
-                break
-
-            pages.extend(results)
-
-            if data.get("size", 0) < self.max_results:
-                break
-
-            start += self.max_results
-
-        return pages
+        return Paginator.paginate(
+            fetch_func,
+            page_size=self.max_results,
+            results_key="results",
+            size_key="size"
+        )
 
     def _fetch_all_pages(self, since: Optional[str] = None) -> list:
         """获取所有可访问的 Pages
@@ -220,33 +201,24 @@ class ConfluenceDataSource(BaseDataSource):
             cql = f"type=page AND lastModified >= '{since}'"
             return self._fetch_pages_by_cql(cql, since=None)  # since 已在 CQL 中
 
-        pages = []
-        start = 0
-
-        while True:
+        # 使用分页器
+        def fetch_func(start: int, limit: int) -> Dict[str, Any]:
             url = f"{self.server}/rest/api/content"
             params = {
                 "type": "page",
                 "status": "current",
-                "limit": self.max_results,
+                "limit": limit,
                 "start": start
             }
-
             response = self._make_request("GET", url, params=params)
-            data = response.json()
+            return response.json()
 
-            results = data.get("results", [])
-            if not results:
-                break
-
-            pages.extend(results)
-
-            if data.get("size", 0) < self.max_results:
-                break
-
-            start += self.max_results
-
-        return pages
+        return Paginator.paginate(
+            fetch_func,
+            page_size=self.max_results,
+            results_key="results",
+            size_key="size"
+        )
 
     def _fetch_page_detail(self, page_id: str) -> Dict[str, Any]:
         """获取 Page 详细信息

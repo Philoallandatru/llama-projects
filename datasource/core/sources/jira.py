@@ -15,6 +15,7 @@ from requests.auth import HTTPBasicAuth
 from llama_index.core import Document
 
 from .base import BaseDataSource
+from ..utils.pagination import Paginator
 
 logger = logging.getLogger(__name__)
 
@@ -138,44 +139,49 @@ class JiraDataSource(BaseDataSource):
         jql = self._build_jql(self.config, since)
         logger.info(f"Starting Jira fetch with JQL: {jql}")
 
-        start_at = 0
+        # 使用分页器获取所有 issue 列表
+        def fetch_func(start: int, limit: int) -> Dict[str, Any]:
+            url = f"{self.server}/rest/api/2/search"
+            params = {
+                "jql": jql,
+                "startAt": start,
+                "maxResults": limit,
+                "fields": "summary,description,status,priority,assignee,reporter,created,updated"
+            }
+            response = self._request_with_retry("GET", url, params=params)
+            return response.json()
+
+        issues = Paginator.paginate(
+            fetch_func,
+            page_size=self.max_results,
+            results_key="issues",
+            size_key="maxResults"  # Jira 返回的是 maxResults 而不是实际大小
+        )
+
+        # 逐个获取详细信息
         total_fetched = 0
+        for issue in issues:
+            issue_key = issue["key"]
 
-        while True:
-            # 获取一页 issues
-            issues = self._fetch_issues_page(start_at, jql)
+            try:
+                # 获取完整的 issue 数据（包含 comments）
+                full_issue = self._fetch_issue_details(issue_key)
 
-            if not issues:
-                break
+                # 保存原始数据
+                issue_file = output_dir / f"{self._sanitize_filename(issue_key)}.json"
+                issue_file.write_text(
+                    json.dumps(full_issue, indent=2, ensure_ascii=False),
+                    encoding="utf-8"
+                )
 
-            for issue in issues:
-                issue_key = issue["key"]
+                total_fetched += 1
+                logger.info(f"Fetched issue {issue_key} ({total_fetched})")
 
-                try:
-                    # 获取完整的 issue 数据（包含 comments）
-                    full_issue = self._fetch_issue_details(issue_key)
+                yield issue_key, full_issue
 
-                    # 保存原始数据
-                    issue_file = output_dir / f"{self._sanitize_filename(issue_key)}.json"
-                    issue_file.write_text(
-                        json.dumps(full_issue, indent=2, ensure_ascii=False),
-                        encoding="utf-8"
-                    )
-
-                    total_fetched += 1
-                    logger.info(f"Fetched issue {issue_key} ({total_fetched})")
-
-                    yield issue_key, full_issue
-
-                except Exception as e:
-                    logger.error(f"Failed to fetch issue {issue_key}: {e}")
-                    continue
-
-            # 检查是否还有更多数据
-            if len(issues) < self.max_results:
-                break
-
-            start_at += self.max_results
+            except Exception as e:
+                logger.error(f"Failed to fetch issue {issue_key}: {e}")
+                continue
 
         logger.info(f"Jira fetch completed: {total_fetched} issues")
 

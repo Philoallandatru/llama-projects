@@ -17,7 +17,6 @@ import aiohttp
 from datasource.core.utils.async_http import AsyncHTTPClient
 
 from ..exceptions import IssueLoadError
-from ..utils.error_handling import handle_errors, retry_on_error
 
 logger = logging.getLogger(__name__)
 

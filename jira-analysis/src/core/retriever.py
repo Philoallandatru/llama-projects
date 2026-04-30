@@ -1,11 +1,11 @@
-"""跨源证据检索器
+"""跨源证据检索器 - 简化版
 
 从 LlamaIndex 向量索引中检索相关证据。
 """
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.core.schema import Document
@@ -22,6 +22,13 @@ class EvidenceRetriever:
     - 支持相似度搜索
     """
 
+    # 索引配置
+    INDEX_CONFIGS = {
+        "similar_issues": {"subdir": "jira", "name": "Jira"},
+        "confluence": {"subdir": "confluence", "name": "Confluence"},
+        "specs": {"subdir": "specs", "name": "Specs"}
+    }
+
     def __init__(self, index_base_path: Path):
         """初始化证据检索器
 
@@ -29,16 +36,12 @@ class EvidenceRetriever:
             index_base_path: 索引基础路径（包含 jira/confluence/specs 子目录）
         """
         self.index_base_path = Path(index_base_path)
+        self.indexes = {}
 
-        # 索引路径
-        self.jira_index_path = self.index_base_path / "jira"
-        self.confluence_index_path = self.index_base_path / "confluence"
-        self.spec_index_path = self.index_base_path / "specs"
-
-        # 加载索引
-        self.jira_index = self._load_index(self.jira_index_path, "Jira")
-        self.confluence_index = self._load_index(self.confluence_index_path, "Confluence")
-        self.spec_index = self._load_index(self.spec_index_path, "Specs")
+        # 加载所有索引
+        for key, config in self.INDEX_CONFIGS.items():
+            index_path = self.index_base_path / config["subdir"]
+            self.indexes[key] = self._load_index(index_path, config["name"])
 
         logger.info("EvidenceRetriever initialized")
 
@@ -65,122 +68,52 @@ class EvidenceRetriever:
             logger.error(f"Failed to load {name} index: {e}")
             return None
 
-    def retrieve_similar_issues(
+    def retrieve(
         self,
+        index_key: str,
         query: str,
         top_k: int = 5,
         exclude_issue_key: Optional[str] = None
     ) -> List[Document]:
-        """检索相似的历史 Jira issues
+        """通用检索方法
 
         Args:
+            index_key: 索引键（similar_issues/confluence/specs）
             query: 查询文本
             top_k: 返回结果数量
-            exclude_issue_key: 排除的 issue key（通常是目标 issue 本身）
+            exclude_issue_key: 排除的 issue key（仅对 similar_issues 有效）
 
         Returns:
             Document 列表
         """
-        if not self.jira_index:
-            logger.warning("Jira index not available")
+        index = self.indexes.get(index_key)
+        if not index:
+            logger.warning(f"{index_key} index not available")
             return []
 
         try:
-            retriever = self.jira_index.as_retriever(similarity_top_k=top_k * 2)
+            # 对于 similar_issues，获取更多结果以便过滤
+            fetch_k = top_k * 2 if index_key == "similar_issues" and exclude_issue_key else top_k
+            retriever = index.as_retriever(similarity_top_k=fetch_k)
             nodes = retriever.retrieve(query)
 
-            # 过滤掉目标 issue 本身
-            filtered_docs = []
+            # 转换为 Document 并过滤
+            docs = []
             for node in nodes:
-                issue_key = node.metadata.get("issue_key", "")
-                if exclude_issue_key and issue_key == exclude_issue_key:
+                # 过滤目标 issue 本身
+                if exclude_issue_key and node.metadata.get("issue_key") == exclude_issue_key:
                     continue
 
-                # 转换为 Document
-                doc = Document(
-                    text=node.text,
-                    metadata=node.metadata
-                )
-                filtered_docs.append(doc)
+                docs.append(Document(text=node.text, metadata=node.metadata))
 
-                if len(filtered_docs) >= top_k:
+                if len(docs) >= top_k:
                     break
 
-            logger.info(f"Retrieved {len(filtered_docs)} similar issues")
-            return filtered_docs
-
-        except Exception as e:
-            logger.error(f"Failed to retrieve similar issues: {e}")
-            return []
-
-    def retrieve_confluence_docs(
-        self,
-        query: str,
-        top_k: int = 3
-    ) -> List[Document]:
-        """检索相关的 Confluence 文档
-
-        Args:
-            query: 查询文本
-            top_k: 返回结果数量
-
-        Returns:
-            Document 列表
-        """
-        if not self.confluence_index:
-            logger.warning("Confluence index not available")
-            return []
-
-        try:
-            retriever = self.confluence_index.as_retriever(similarity_top_k=top_k)
-            nodes = retriever.retrieve(query)
-
-            # 转换为 Document
-            docs = [
-                Document(text=node.text, metadata=node.metadata)
-                for node in nodes
-            ]
-
-            logger.info(f"Retrieved {len(docs)} Confluence documents")
+            logger.info(f"Retrieved {len(docs)} documents from {index_key}")
             return docs
 
         except Exception as e:
-            logger.error(f"Failed to retrieve Confluence docs: {e}")
-            return []
-
-    def retrieve_spec_docs(
-        self,
-        query: str,
-        top_k: int = 3
-    ) -> List[Document]:
-        """检索相关的规格文档
-
-        Args:
-            query: 查询文本
-            top_k: 返回结果数量
-
-        Returns:
-            Document 列表
-        """
-        if not self.spec_index:
-            logger.warning("Specs index not available")
-            return []
-
-        try:
-            retriever = self.spec_index.as_retriever(similarity_top_k=top_k)
-            nodes = retriever.retrieve(query)
-
-            # 转换为 Document
-            docs = [
-                Document(text=node.text, metadata=node.metadata)
-                for node in nodes
-            ]
-
-            logger.info(f"Retrieved {len(docs)} spec documents")
-            return docs
-
-        except Exception as e:
-            logger.error(f"Failed to retrieve spec docs: {e}")
+            logger.error(f"Failed to retrieve from {index_key}: {e}")
             return []
 
     def retrieve_all_evidence(
@@ -190,7 +123,7 @@ class EvidenceRetriever:
         confluence_top_k: int = 3,
         spec_top_k: int = 3,
         exclude_issue_key: Optional[str] = None
-    ) -> dict[str, List[Document]]:
+    ) -> Dict[str, List[Document]]:
         """一次性检索所有类型的证据
 
         Args:
@@ -204,11 +137,9 @@ class EvidenceRetriever:
             包含三类证据的字典
         """
         evidence = {
-            "similar_issues": self.retrieve_similar_issues(
-                query, similar_issues_top_k, exclude_issue_key
-            ),
-            "confluence": self.retrieve_confluence_docs(query, confluence_top_k),
-            "specs": self.retrieve_spec_docs(query, spec_top_k)
+            "similar_issues": self.retrieve("similar_issues", query, similar_issues_top_k, exclude_issue_key),
+            "confluence": self.retrieve("confluence", query, confluence_top_k),
+            "specs": self.retrieve("specs", query, spec_top_k)
         }
 
         total_count = sum(len(docs) for docs in evidence.values())

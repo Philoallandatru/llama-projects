@@ -24,6 +24,7 @@ from ..core.retriever import EvidenceRetriever
 from ..core.prompt_builder import PromptBuilder
 from ..core.llm_client import LLMClient
 from ..settings import settings
+from ..utils.query_builder import build_retrieval_query
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ class BatchAnalysisWorkflow(Workflow):
                     # 检索证据
                     evidence = {"similar_issues": [], "confluence": [], "specs": []}
                     if retrieve_evidence and retriever:
-                        query = self._build_query(issue_data)
+                        query = build_retrieval_query(issue_data)
                         evidence = retriever.retrieve_all_evidence(
                             query=query,
                             similar_issues_top_k=settings.retrieve_similar_issues_top_k,
@@ -395,22 +396,3 @@ class BatchAnalysisWorkflow(Workflow):
         summary = await llm_client.generate(prompt)
 
         return summary
-
-    def _build_query(self, issue_data: Dict[str, Any]) -> str:
-        """构建检索查询文本
-
-        Args:
-            issue_data: Issue 数据
-
-        Returns:
-            查询文本
-        """
-        fields = issue_data.get("fields", {})
-        summary = fields.get("summary", "")
-        description = fields.get("description", "")
-
-        query_parts = [summary]
-        if description:
-            query_parts.append(description[:500])
-
-        return " ".join(query_parts)

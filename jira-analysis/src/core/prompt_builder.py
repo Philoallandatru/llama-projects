@@ -170,40 +170,32 @@ class PromptBuilder:
         Returns:
             格式化的证据文本
         """
+        # 证据类型配置
+        evidence_configs = [
+            ("similar_issues", "### 相似的历史 Issues", "issue_key", "summary"),
+            ("confluence", "\n### Confluence 文档", "title", None),
+            ("specs", "\n### 规格文档", "file_name", None),
+        ]
+
         sections = []
+        for key, header, primary_field, secondary_field in evidence_configs:
+            docs = evidence.get(key, [])
+            if not docs:
+                continue
 
-        # 相似 issues
-        similar_issues = evidence.get("similar_issues", [])
-        if similar_issues:
-            sections.append("### 相似的历史 Issues")
-            for i, doc in enumerate(similar_issues, 1):
-                issue_key = doc.metadata.get("issue_key", "Unknown")
-                summary = doc.metadata.get("summary", "")
-                sections.append(f"\n**{i}. {issue_key}**: {summary}")
+            sections.append(header)
+            for i, doc in enumerate(docs, 1):
+                primary = doc.metadata.get(primary_field, "Unknown")
+
+                # 构建标题
+                if secondary_field and (secondary := doc.metadata.get(secondary_field)):
+                    sections.append(f"\n**{i}. {primary}**: {secondary}")
+                else:
+                    sections.append(f"\n**{i}. {primary}**")
+
                 sections.append(f"```\n{doc.text[:500]}...\n```")
 
-        # Confluence 文档
-        confluence_docs = evidence.get("confluence", [])
-        if confluence_docs:
-            sections.append("\n### Confluence 文档")
-            for i, doc in enumerate(confluence_docs, 1):
-                title = doc.metadata.get("title", "Unknown")
-                sections.append(f"\n**{i}. {title}**")
-                sections.append(f"```\n{doc.text[:500]}...\n```")
-
-        # 规格文档
-        spec_docs = evidence.get("specs", [])
-        if spec_docs:
-            sections.append("\n### 规格文档")
-            for i, doc in enumerate(spec_docs, 1):
-                filename = doc.metadata.get("file_name", "Unknown")
-                sections.append(f"\n**{i}. {filename}**")
-                sections.append(f"```\n{doc.text[:500]}...\n```")
-
-        if not sections:
-            return "（未检索到相关证据）"
-
-        return "\n".join(sections)
+        return "\n".join(sections) if sections else "（未检索到相关证据）"
 
     def _get_user_name(self, user: Any) -> str:
         """获取用户名

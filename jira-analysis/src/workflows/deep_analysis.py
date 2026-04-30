@@ -23,6 +23,7 @@ from ..core.retriever import EvidenceRetriever
 from ..core.prompt_builder import PromptBuilder
 from ..core.llm_client import LLMClient
 from ..settings import settings
+from ..utils.query_builder import build_retrieval_query
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ class DeepAnalysisWorkflow(Workflow):
         issue_key = ctx.data["issue_key"]
 
         # 构建查询文本
-        query = self._build_query(issue_data)
+        query = build_retrieval_query(issue_data)
 
         # 检索证据
         retriever = EvidenceRetriever(self.index_base_path)
@@ -330,33 +331,3 @@ class DeepAnalysisWorkflow(Workflow):
         logger.info(f"Analysis completed for {issue_key}")
 
         return StopEvent(result=result)
-
-    def _build_query(self, issue_data: Dict[str, Any]) -> str:
-        """构建检索查询文本
-
-        Args:
-            issue_data: Issue 数据
-
-        Returns:
-            查询文本
-        """
-        fields = issue_data.get("fields", {})
-        summary = fields.get("summary", "")
-        description = fields.get("description", "")
-
-        # 提取前几条 comments
-        comments = fields.get("comment", {}).get("comments", [])
-        comment_texts = []
-        for comment in comments[:3]:  # 只取前 3 条
-            body = comment.get("body", "")
-            if body:
-                comment_texts.append(body[:200])  # 每条最多 200 字符
-
-        # 组合查询文本
-        query_parts = [summary]
-        if description:
-            query_parts.append(description[:500])  # 描述最多 500 字符
-        if comment_texts:
-            query_parts.extend(comment_texts)
-
-        return " ".join(query_parts)

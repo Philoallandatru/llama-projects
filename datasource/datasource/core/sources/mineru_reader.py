@@ -1,11 +1,22 @@
-"""高质量 PDF 解析器
+"""MinerU PDF 解析器
 
-使用 PyMuPDF (fitz) 进行高质量 PDF 文本提取，支持 OCR 和复杂布局。
-适用于 Windows/Linux/macOS。
+使用 MinerU 进行高质量 PDF 解析，支持：
+- 智能文档结构识别
+- 自动目录检测和过滤
+- 表格和公式提取
+- Markdown 格式输出
+- OCR 支持
+
+安装: pip install mineru
+
+MinerU 官网: https://mineru.net/
+GitHub: https://github.com/opendatalab/MinerU
 """
 
-import json
 import logging
+import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -14,183 +25,99 @@ from llama_index.core.readers.base import BaseReader
 
 logger = logging.getLogger(__name__)
 
+# 检查 MinerU 是否可用
+try:
+    import mineru
+    MINERU_AVAILABLE = True
+except ImportError:
+    MINERU_AVAILABLE = False
+    logger.warning(
+        "MinerU not installed. Install with: pip install mineru\n"
+        "Falling back to PyMuPDF reader."
+    )
 
-class EnhancedPDFReader(BaseReader):
-    """增强型 PDF 阅读器
 
-    使用 PyMuPDF (fitz) 库进行 PDF 解析，支持：
-    - 高质量文本提取
-    - 表格识别
-    - 图片提取
-    - 保留布局信息
+class MinerUReader(BaseReader):
+    """MinerU PDF 阅读器
+
+    使用 MinerU 进行智能 PDF 解析，特别适合：
+    - 学术论文
+    - 技术规格文档
+    - 复杂布局的文档
 
     Args:
-        extract_images: 是否提取图片（默认 False）
-        extract_tables: 是否提取表格（默认 True）
-        preserve_layout: 是否保留布局（默认 True）
+        skip_toc: 是否自动跳过目录页（默认 True）
+        min_page_length: 最小页面长度，短于此长度的页面会被跳过（默认 50）
+        method: 解析方法 "auto", "txt", "ocr"（默认 "auto"）
+        backend: 后端类型（默认 "pipeline"）
+        lang: 语言（默认 "ch"）
+        formula_enable: 是否提取公式（默认 True）
+        table_enable: 是否提取表格（默认 True）
     """
 
     def __init__(
         self,
-        extract_images: bool = False,
-        extract_tables: bool = True,
-        preserve_layout: bool = True,
+        skip_toc: bool = True,
+        min_page_length: int = 50,
+        method: str = "auto",
+        backend: str = "pipeline",
+        lang: str = "ch",
+        formula_enable: bool = True,
+        table_enable: bool = True,
     ):
-        self.extract_images = extract_images
-        self.extract_tables = extract_tables
-        self.preserve_layout = preserve_layout
+        if not MINERU_AVAILABLE:
+            raise ImportError(
+                "MinerU is not installed. Install with: pip install mineru"
+            )
+
+        self.skip_toc = skip_toc
+        self.min_page_length = min_page_length
+        self.method = method
+        self.backend = backend
+        self.lang = lang
+        self.formula_enable = formula_enable
+        self.table_enable = table_enable
 
     def load_data(
         self,
-        file_path: str,
-        extra_info: Optional[Dict[str, Any]] = None
+        file: Path,
+        extra_info: Optional[Dict[str, Any]] = None,
     ) -> List[Document]:
         """加载 PDF 文件
 
         Args:
-            file_path: PDF 文件路径
+            file: PDF 文件路径
             extra_info: 额外的元数据
 
         Returns:
             Document 列表
         """
-        try:
-            import fitz  # PyMuPDF
-        except ImportError:
-            logger.error(
-                "PyMuPDF not installed. "
-                "Install with: pip install pymupdf"
-            )
-            raise
-
-        file_path = Path(file_path)
+        file_path = Path(file)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        if not file_path.suffix.lower() == ".pdf":
+            raise ValueError(f"File must be a PDF: {file_path}")
+
+        logger.info(f"Parsing {file_path.name} with MinerU...")
+
         try:
-            # 打开 PDF
-            doc = fitz.open(str(file_path))
+            # 使用 MinerU CLI 解析（最稳定的方式）
+            documents = self._parse_with_cli(file_path, extra_info)
 
-            text_parts = []
-
-            # 逐页提取
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-
-                # 提取文本（保留布局）
-                if self.preserve_layout:
-                    text = page.get_text("text", sort=True)
-                else:
-                    text = page.get_text()
-
-                if text.strip():
-                    text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
-
-                # 提取表格
-                if self.extract_tables:
-                    tables = self._extract_tables(page)
-                    if tables:
-                        text_parts.append(f"\n{tables}\n")
-
-            full_text = '\n\n'.join(text_parts)
-
-            # 构建元数据
-            metadata = extra_info or {}
-            metadata.update({
-                'file_path': str(file_path),
-                'file_name': file_path.name,
-                'file_size': file_path.stat().st_size,
-                'parser': 'pymupdf',
-                'num_pages': len(doc),
-                'extract_images': self.extract_images,
-                'extract_tables': self.extract_tables,
-            })
-
-            # 添加 PDF 元数据
-            pdf_metadata = doc.metadata
-            if pdf_metadata:
-                metadata.update({
-                    'pdf_title': pdf_metadata.get('title', ''),
-                    'pdf_author': pdf_metadata.get('author', ''),
-                    'pdf_subject': pdf_metadata.get('subject', ''),
-                })
-
-            doc.close()
-
-            # 创建 Document
-            document = Document(
-                text=full_text,
-                metadata=metadata,
-            )
-
-            return [document]
+            logger.info(f"Loaded {len(documents)} pages from {file_path.name}")
+            return documents
 
         except Exception as e:
-            logger.error(f"Failed to parse PDF with PyMuPDF: {e}")
-            # 回退到 pypdf
-            return self._fallback_parse(file_path, extra_info)
+            logger.error(f"Failed to parse PDF with MinerU: {e}")
+            raise
 
-    def _extract_tables(self, page) -> str:
-        """从页面提取表格
-
-        Args:
-            page: PyMuPDF 页面对象
-
-        Returns:
-            Markdown 格式的表格
-        """
-        try:
-            # PyMuPDF 的表格提取
-            tables = page.find_tables()
-            if not tables:
-                return ""
-
-            table_texts = []
-            for table in tables:
-                # 转换为 markdown
-                rows = table.extract()
-                if rows:
-                    md_table = self._format_table_markdown(rows)
-                    table_texts.append(md_table)
-
-            return '\n\n'.join(table_texts)
-
-        except Exception as e:
-            logger.warning(f"Failed to extract tables: {e}")
-            return ""
-
-    def _format_table_markdown(self, rows: List[List[str]]) -> str:
-        """将表格格式化为 markdown
-
-        Args:
-            rows: 表格行列表
-
-        Returns:
-            Markdown 格式的表格
-        """
-        if not rows:
-            return ""
-
-        lines = []
-        for i, row in enumerate(rows):
-            # 清理单元格内容
-            cells = [str(cell).strip() if cell else '' for cell in row]
-            line = '| ' + ' | '.join(cells) + ' |'
-            lines.append(line)
-
-            # 添加表头分隔符
-            if i == 0:
-                separator = '| ' + ' | '.join(['---'] * len(cells)) + ' |'
-                lines.append(separator)
-
-        return '\n'.join(lines)
-
-    def _fallback_parse(
+    def _parse_with_cli(
         self,
         file_path: Path,
-        extra_info: Optional[Dict[str, Any]] = None
+        extra_info: Optional[Dict[str, Any]],
     ) -> List[Document]:
-        """回退到 pypdf 解析
+        """使用 MinerU CLI 解析 PDF
 
         Args:
             file_path: PDF 文件路径
@@ -199,31 +126,171 @@ class EnhancedPDFReader(BaseReader):
         Returns:
             Document 列表
         """
-        try:
-            from pypdf import PdfReader
+        # 创建临时输出目录
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_output = Path(temp_dir)
 
-            reader = PdfReader(str(file_path))
-            text_parts = []
+            # 构建 MinerU 命令
+            cmd = [
+                "mineru",
+                "-p", str(file_path),
+                "-o", str(temp_output),
+                "-m", self.method,
+                "-b", self.backend,
+                "-l", self.lang,
+            ]
 
-            for page_num, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text:
-                    text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
+            # 添加可选参数
+            if not self.formula_enable:
+                cmd.extend(["-f", "False"])
+            if not self.table_enable:
+                cmd.extend(["-t", "False"])
 
-            full_text = '\n\n'.join(text_parts)
+            # 执行命令
+            logger.debug(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 分钟超时
+            )
 
-            metadata = extra_info or {}
-            metadata.update({
-                'file_path': str(file_path),
-                'file_name': file_path.name,
-                'file_size': file_path.stat().st_size,
-                'parser': 'pypdf',
-                'num_pages': len(reader.pages),
-            })
+            if result.returncode != 0:
+                logger.error(f"MinerU failed: {result.stderr}")
+                raise RuntimeError(f"MinerU parsing failed: {result.stderr}")
 
-            return [Document(text=full_text, metadata=metadata)]
+            # 查找输出的 Markdown 文件
+            # MinerU 输出格式: output_dir/filename/filename.md
+            pdf_name = file_path.stem
+            md_file = temp_output / pdf_name / f"{pdf_name}.md"
 
-        except Exception as e:
-            logger.error(f"Fallback parse also failed: {e}")
-            raise
+            if not md_file.exists():
+                # 尝试其他可能的位置
+                md_files = list(temp_output.rglob("*.md"))
+                if md_files:
+                    md_file = md_files[0]
+                else:
+                    raise FileNotFoundError(f"MinerU output not found in {temp_output}")
 
+            # 读取 Markdown 内容
+            with open(md_file, "r", encoding="utf-8") as f:
+                md_content = f.read()
+
+            # 解析 Markdown 为 Documents
+            documents = self._parse_markdown(md_content, file_path, extra_info)
+
+            return documents
+
+    def _parse_markdown(
+        self,
+        md_content: str,
+        file_path: Path,
+        extra_info: Optional[Dict[str, Any]],
+    ) -> List[Document]:
+        """解析 Markdown 内容为 Documents
+
+        Args:
+            md_content: Markdown 内容
+            file_path: 原始 PDF 文件路径
+            extra_info: 额外的元数据
+
+        Returns:
+            Document 列表
+        """
+        documents = []
+
+        # 按页面分割
+        pages = self._split_markdown_pages(md_content)
+
+        for page_num, page_content in enumerate(pages, start=1):
+            page_content = page_content.strip()
+
+            # 过滤目录页
+            if self.skip_toc and self._is_toc_content(page_content):
+                logger.debug(f"Skipping TOC page: {page_num}")
+                continue
+
+            # 过滤短页面
+            if len(page_content) < self.min_page_length:
+                logger.debug(f"Skipping short page: {page_num} (length: {len(page_content)})")
+                continue
+
+            # 创建元数据
+            metadata = {
+                "page": page_num,
+                "source": str(file_path),
+                "file_name": file_path.name,
+                "file_size": file_path.stat().st_size,
+                "format": "markdown",
+                "parser": "mineru",
+            }
+            if extra_info:
+                metadata.update(extra_info)
+
+            documents.append(Document(text=page_content, metadata=metadata))
+
+        return documents
+
+    def _split_markdown_pages(self, md_content: str) -> List[str]:
+        """分割 Markdown 内容为页面"""
+        # 尝试按页面标记分割
+        separators = [
+            r'\n---\s*Page\s+\d+\s*---\n',
+            r'\n##\s*Page\s+\d+\n',
+            r'\n<!-- Page \d+ -->\n',
+        ]
+
+        for separator in separators:
+            parts = re.split(separator, md_content)
+            if len(parts) > 1:
+                return [p for p in parts if p.strip()]
+
+        # 按一级标题分割
+        sections = re.split(r'\n#\s+', md_content)
+        if len(sections) > 1:
+            return [f"# {s}" if i > 0 else s for i, s in enumerate(sections) if s.strip()]
+
+        # 按段落分组
+        paragraphs = [p.strip() for p in md_content.split('\n\n') if p.strip()]
+        if len(paragraphs) > 10:
+            pages = []
+            for i in range(0, len(paragraphs), 10):
+                page = '\n\n'.join(paragraphs[i:i+10])
+                pages.append(page)
+            return pages
+
+        # 整个文档作为一页
+        return [md_content]
+
+    def _is_toc_content(self, content: str) -> bool:
+        """判断是否是目录"""
+        content_lower = content.lower()
+
+        # 目录标题
+        toc_headers = ['# contents', '# 目录', '# table of contents', '# index']
+        if any(header in content_lower for header in toc_headers):
+            return True
+
+        # 目录特征
+        has_many_links = content.count('[') > 10
+        has_dots = len(re.findall(r'\.{3,}', content)) > 5
+        has_page_numbers = len(re.findall(r'\b\d{1,3}\b', content)) > 10
+        has_chapter_numbers = len(re.findall(r'^\d+\.\d+', content, re.MULTILINE)) > 5
+
+        features_count = sum([
+            has_many_links,
+            has_dots,
+            has_page_numbers and (has_dots or has_chapter_numbers),
+        ])
+
+        return features_count >= 2
+
+
+# 如果 MinerU 不可用，提供占位符
+if not MINERU_AVAILABLE:
+    class MinerUReader(BaseReader):
+        def __init__(self, *args, **kwargs):
+            raise ImportError("MinerU is not installed. Install with: pip install mineru")
+
+        def load_data(self, *args, **kwargs):
+            raise ImportError("MinerU is not installed. Install with: pip install mineru")

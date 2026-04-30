@@ -117,6 +117,37 @@ jira-analysis/
 └── llama_deploy.yml       # 部署配置
 ```
 
+## 测试
+
+### 单元测试
+
+```bash
+# 运行单元测试
+uv run pytest tests/ -v
+
+# 排除 E2E 测试
+uv run pytest tests/ -v --ignore=tests/e2e/
+```
+
+### E2E 测试
+
+项目包含完整的端到端测试套件，使用 Playwright 进行 UI 测试。
+
+```bash
+# 安装 E2E 测试依赖
+uv sync --extra e2e
+uv run playwright install chromium
+
+# 运行所有 E2E 测试
+uv run pytest tests/e2e/ -v
+
+# 使用快速启动脚本（推荐）
+bash scripts/run-e2e-tests.sh  # Linux/Mac
+scripts\run-e2e-tests.bat      # Windows
+```
+
+详细信息请参见 [E2E 测试文档](docs/E2E_TESTING.md)。
+
 ## 开发
 
 ```bash

@@ -26,6 +26,14 @@ dev = [
     "mypy>=1.8.0",
     "ruff>=0.2.0",
 ]
+e2e = [
+    "playwright>=1.40.0",
+    "pytest-playwright>=0.4.0",
+    "aiohttp>=3.9.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-html>=4.1.0",
+    "pytest-cov>=4.1.0",
+]
 
 [build-system]
 requires = ["hatchling"]

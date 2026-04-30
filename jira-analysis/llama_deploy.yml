@@ -1,0 +1,21 @@
+name: jira-analysis
+
+control-plane:
+  port: 8000
+
+default-service: deep-analysis
+
+services:
+  deep-analysis:
+    name: deep-analysis
+    source:
+      type: local
+      name: workflows.deep_analysis:DeepAnalysisWorkflow
+    path: /deep-analysis
+
+  batch-analysis:
+    name: batch-analysis
+    source:
+      type: local
+      name: workflows.batch_analysis:BatchAnalysisWorkflow
+    path: /batch-analysis

@@ -1,0 +1,16 @@
+[tool.uv.workspace]
+members = ["datasource", "chat", "deep-search", "data-explore"]
+
+[project]
+name = "llama-projects"
+version = "0.1.0"
+description = "LlamaIndex multi-project workspace"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.7.0",
+]

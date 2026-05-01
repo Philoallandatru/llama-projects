@@ -178,24 +178,37 @@ class TestSourceManager:
         assert source is not None
         assert source.config == config
 
-    def test_create_source_jira_not_implemented(self, manager):
-        """测试创建 Jira 数据源（未实现）"""
+    def test_create_source_jira_requires_token(self, manager):
+        """测试创建 Jira 数据源需要 token"""
         config = SourceConfig(
             name="test",
             type=SourceType.JIRA,
             server="https://jira.example.com"
         )
 
-        with pytest.raises(NotImplementedError, match="Jira"):
+        with pytest.raises(ValueError, match="token"):
             manager._create_source(config)
 
-    def test_create_source_confluence_not_implemented(self, manager):
-        """测试创建 Confluence 数据源（未实现）"""
+    def test_create_source_confluence(self, manager):
+        """测试创建 Confluence 数据源"""
+        config = SourceConfig(
+            name="test",
+            type=SourceType.CONFLUENCE,
+            server="https://confluence.example.com",
+            options={"token": "test_token"}
+        )
+
+        source = manager._create_source(config)
+        assert source is not None
+        assert source.server == "https://confluence.example.com"
+
+    def test_create_source_confluence_missing_token(self, manager):
+        """测试创建 Confluence 数据源缺少 token"""
         config = SourceConfig(
             name="test",
             type=SourceType.CONFLUENCE,
             server="https://confluence.example.com"
         )
 
-        with pytest.raises(NotImplementedError, match="Confluence"):
+        with pytest.raises(ValueError, match="必须在 options 中指定 token"):
             manager._create_source(config)

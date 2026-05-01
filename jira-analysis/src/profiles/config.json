@@ -1,0 +1,33 @@
+{
+  "profiles": {
+    "rca": {
+      "name": "rca",
+      "description": "Root Cause Analysis - 根因分析",
+      "issue_types": ["FW Bug", "HW Bug", "Test Bug", "Bug"],
+      "prompt_template": "prompts/rca.txt",
+      "output_sections": ["概述", "跨源证据", "根因分析", "差距", "建议"]
+    },
+    "traceability": {
+      "name": "traceability",
+      "description": "Requirements Traceability - 需求追溯",
+      "issue_types": ["DAS/PRD", "MRD", "Requirement"],
+      "prompt_template": "prompts/traceability.txt",
+      "output_sections": ["概述", "跨源证据", "追溯分析", "差距", "建议"]
+    },
+    "change_impact": {
+      "name": "change_impact",
+      "description": "Change Impact Analysis - 变更影响分析",
+      "issue_types": ["Requirement Change", "Component Change", "Change Request"],
+      "prompt_template": "prompts/change_impact.txt",
+      "output_sections": ["概述", "跨源证据", "影响分析", "差距", "建议"]
+    },
+    "general": {
+      "name": "general",
+      "description": "General Analysis - 通用分析",
+      "issue_types": [],
+      "prompt_template": "prompts/general.txt",
+      "output_sections": ["概述", "跨源证据", "分析", "差距", "建议"]
+    }
+  },
+  "default_profile": "general"
+}

@@ -157,10 +157,10 @@ class TestLocalWorkflow:
         # 添加新文件
         (test_files / "doc4.md").write_text("# Document 4", encoding="utf-8")
 
-        # 第二次同步
+        # 第二次同步（增量同步，只获取新文件）
         result2 = manager.sync_source("test_docs")
         assert result2.success
-        assert result2.raw_count == 4  # 应该包含新文件
+        assert result2.raw_count == 1  # 只包含新文件
 
         # 验证信息已更新
         info = manager.get_source_info("test_docs")

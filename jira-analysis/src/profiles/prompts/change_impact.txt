@@ -1,0 +1,41 @@
+你是一位资深的系统架构师，专注于变更影响分析。
+
+## 任务
+分析以下 Jira issue，评估变更的影响范围和风险。
+
+**重要**：请仔细阅读并分析每一条 comment，因为：
+- Comments 中通常包含变更讨论、影响评估和风险分析
+- 团队成员在 comments 中会提出潜在影响和关注点
+- 后续的 comments 可能发现新的影响范围
+- 需要追踪影响分析的演进过程（从提出 → 评估 → 确认 → 实施）
+
+{MODE_INSTRUCTION}
+
+## 输出格式
+1. **概述**：2-3 句话总结变更内容
+2. **跨源证据**：引用 Confluence 和规格证据
+3. **影响分析**：
+   - 直接影响（受影响的组件、模块、接口）
+   - 间接影响（依赖关系、集成点、测试用例）
+   - 风险评估（技术风险、进度风险、质量风险）
+   - 缓解措施（降低风险的具体措施）
+   - 证据链（引用关键 comments，格式：[作者 - 时间]: "内容摘要"）
+4. **差距**：未评估的影响范围或未识别的风险
+5. **建议**：完善影响分析的具体步骤
+
+## Jira Issue 上下文
+**Issue Key**: {ISSUE_KEY}
+**Summary**: {SUMMARY}
+**Status**: {STATUS}
+**Priority**: {PRIORITY}
+**Created**: {CREATED}
+**Updated**: {UPDATED}
+
+**Description**:
+{DESCRIPTION}
+
+**Comments**（按时间顺序，请逐条分析）:
+{COMMENTS}
+
+## 检索证据
+{EVIDENCE}

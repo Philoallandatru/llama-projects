@@ -1,0 +1,35 @@
+{
+  "key": "TEST-456",
+  "fields": {
+    "summary": "添加用户头像上传功能",
+    "description": "需求描述：\n用户希望能够上传自定义头像，而不是使用默认头像。\n\n功能要求：\n1. 支持 JPG、PNG 格式\n2. 图片大小限制在 2MB 以内\n3. 自动裁剪为正方形\n4. 生成缩略图（100x100, 200x200）\n\n技术方案：\n- 使用 Pillow 库处理图片\n- 存储到 OSS\n- 数据库记录图片 URL",
+    "status": {
+      "name": "In Progress"
+    },
+    "priority": {
+      "name": "High"
+    },
+    "issuetype": {
+      "name": "Story"
+    },
+    "created": "2024-01-10T09:00:00.000+0800",
+    "updated": "2024-01-18T16:45:00.000+0800",
+    "reporter": {
+      "displayName": "产品经理"
+    },
+    "assignee": {
+      "displayName": "开发工程师"
+    },
+    "comment": {
+      "comments": [
+        {
+          "author": {
+            "displayName": "架构师"
+          },
+          "body": "建议使用 CDN 加速图片访问，提升用户体验。",
+          "created": "2024-01-11T10:00:00.000+0800"
+        }
+      ]
+    }
+  }
+}

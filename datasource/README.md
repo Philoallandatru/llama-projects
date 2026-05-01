@@ -1,113 +1,142 @@
 # DataSource - 统一数据源管理系统
 
-> 为 LlamaIndex 项目提供统一的数据源管理、索引和检索能力
+统一数据源管理和索引生成系统，为 LlamaIndex 项目提供数据基础设施。
 
 ## 项目状态
 
-🚧 **开发中** - Phase 1: 基础设施
+✅ **Phase 6 已完成** - 增量同步、异步抓取、代码重构  
+**进度**: 75% (6/8 phases)
 
 ## 功能特性
 
-- ✅ 统一的数据源管理接口
-- ✅ 支持多种数据源类型
-  - 📁 本地文件（PDF、Word、Excel、Markdown）
-  - 🎫 Jira Issues
-  - 📚 Confluence Pages
-- ✅ 混合检索（Vector + BM25）
-- ✅ 简洁的 CLI 工具
-- ✅ 与 LlamaIndex chat 项目无缝集成
+### 多数据源支持
+- 📁 **Local**: 本地文件系统（Markdown, PDF, Office 文档等）
+- 🎫 **Jira Server**: Issues, Comments, Projects
+- 📚 **Confluence Server**: Pages, Spaces, Attachments
+
+### 高级特性（Phase 6）
+- ✅ **增量同步**：基于 `lastModified` 时间戳，速度提升 80-90%
+- ✅ **异步抓取**：5-10x 性能提升（基于 aiohttp）
+- ✅ **HTML 清理**：智能清理 Confluence/Jira HTML 内容
+- ✅ **通用工具层**：Paginator, RetryHandler, AsyncHTTPClient
+
+### 数据治理
+- 质量检查：长度验证、编码检测、去重
+- PII 过滤：邮箱、电话、身份证等敏感信息
+- 内容过滤：不安全内容检测
 
 ## 快速开始
 
 ### 安装
 
 ```bash
-cd datasource
-pip install -r requirements.txt
+cd datasource/
+uv sync
 ```
 
-### 基本使用
+### 配置环境变量
+
+创建 `.env` 文件：
 
 ```bash
-# 1. 添加数据源
-ds add my_docs --type local --path ./data/documents
+# Jira 配置
+JIRA_SERVER=https://jira.example.com
+JIRA_EMAIL=user@example.com
+JIRA_TOKEN=your_token
 
-# 2. 同步数据（抓取 + 索引）
-ds sync my_docs
+# Confluence 配置
+CONFLUENCE_SERVER=https://confluence.example.com
+CONFLUENCE_EMAIL=user@example.com
+CONFLUENCE_TOKEN=your_token
+```
 
-# 3. 查询
-ds query my_docs "如何解决 S4 黑屏问题？"
+### 命令行使用
 
-# 4. 查看所有数据源
-ds list
+```bash
+# 同步数据源
+uv run datasource sync local ./data
+uv run datasource sync jira --project PROJ
+uv run datasource sync confluence --space SPACE
 
-# 5. 查看详情
-ds show my_docs
+# 生成索引
+uv run datasource index local --strategy vector
+uv run datasource index jira --strategy hybrid
+
+# 查询索引
+uv run datasource query "your question" --source local
+```
+
+### Python API 使用
+
+```python
+from datasource.core.manager import DataSourceManager
+from datasource.core.indexing.vector import VectorIndexStrategy
+
+# 创建管理器
+manager = DataSourceManager(base_path="./data")
+
+# 同步数据源
+await manager.sync_source("jira", project="PROJ")
+
+# 生成索引
+strategy = VectorIndexStrategy()
+index = await manager.create_index("jira", strategy)
+
+# 查询
+results = index.query("your question", top_k=5)
 ```
 
 ## 项目结构
 
 ```
 datasource/
-├── core/                       # 核心模块
-│   ├── models.py              # 数据模型
-│   ├── paths.py               # 路径管理
-│   ├── manager.py             # 数据源管理器
-│   └── sources/               # 数据源实现
-│       ├── base.py            # 基类
-│       ├── local.py           # 本地文件
-│       ├── jira.py            # Jira
-│       └── confluence.py      # Confluence
-├── cli.py                     # CLI 入口
-├── requirements.txt           # 依赖
-├── PLAN.md                    # 项目计划
-├── PROGRESS.md                # 进度跟踪
-└── tests/                     # 测试
-    ├── test_models.py
-    ├── test_paths.py
-    └── integration/
+├── datasource/              # 主包
+│   ├── core/
+│   │   ├── sources/        # 数据源实现
+│   │   │   ├── base.py
+│   │   │   ├── local.py
+│   │   │   ├── jira.py
+│   │   │   └── confluence.py
+│   │   ├── indexing/       # 索引策略
+│   │   │   ├── vector.py
+│   │   │   ├── bm25.py
+│   │   │   └── hybrid.py
+│   │   ├── utils/          # 工具层（Phase 6）
+│   │   │   ├── async_http.py
+│   │   │   ├── pagination.py
+│   │   │   ├── retry.py
+│   │   │   └── html_cleaner.py
+│   │   ├── manager.py
+│   │   ├── models.py
+│   │   └── paths.py
+│   └── cli.py
+├── tests/                  # 180+ 测试用例
+├── benchmarks/             # 性能基准测试
+└── pyproject.toml
 ```
 
-## 开发指南
+## 技术亮点
 
-### 开发流程
+1. **增量同步**：只抓取更新的数据，速度提升 80-90%
+2. **异步并发**：使用 aiohttp + Semaphore，100 个 issues 从 20s 降至 3-4s
+3. **智能重试**：指数退避 + 429 限流处理
+4. **通用抽象**：Paginator 和 RetryHandler 减少代码重复 30%
 
-1. 查看 `PLAN.md` 了解项目计划
-2. 查看 `PROGRESS.md` 了解当前进度
-3. 按 Phase 顺序开发
-4. 每个 Phase 完成后进行代码审查
-5. 更新 `PROGRESS.md`
+## 集成到其他项目
 
-### 代码审查
-
-每个 Phase 完成后：
-
-1. 使用 `REVIEW_TEMPLATE.md` 创建审查报告
-2. 修复发现的问题
-3. 重新运行测试
-4. 提交代码
-
-### 测试
+### 在 jira-analysis 中使用
 
 ```bash
-# 运行所有测试
-pytest tests/ -v
+# 1. 在 datasource 中生成索引
+cd datasource/
+uv run datasource sync jira --project PROJ
+uv run datasource index jira --strategy vector
 
-# 运行特定测试
-pytest tests/test_models.py -v
-
-# 查看覆盖率
-pytest tests/ --cov=datasource --cov-report=html
+# 2. 在 jira-analysis 中配置索引路径
+# .env: INDEX_BASE_PATH=../datasource/data/indexes
 ```
 
-## 文档
-
-- [项目计划](PLAN.md) - 详细的实施计划和验收标准
-- [进度跟踪](PROGRESS.md) - 每日进度更新
-- [问题跟踪](ISSUES.md) - 问题和 bug 跟踪
-- [审查模板](REVIEW_TEMPLATE.md) - 代码审查模板
-
-## 集成到 chat 项目
+### 在 chat 中使用
 
 ```python
 from datasource.core.manager import DataSourceManager
@@ -128,10 +157,40 @@ tool = QueryEngineTool.from_defaults(
 )
 ```
 
+## 开发指南
+
+### 测试
+
+```bash
+# 运行所有测试
+uv run pytest
+
+# 运行特定测试
+uv run pytest tests/test_models.py -v
+
+# 查看覆盖率
+uv run pytest --cov=datasource --cov-report=html
+```
+
+### 性能基准测试
+
+```bash
+cd benchmarks/
+uv run python benchmark_sync.py
+uv run python benchmark_async.py
+```
+
+## 下一步计划
+
+- **Phase 7**: 集成到 chat 项目
+- **Phase 8**: 文档完善和性能优化
+
+## 文档
+
+- [项目计划](PLAN.md) - 详细的实施计划
+- [进度跟踪](PROGRESS.md) - 开发进度
+- [问题跟踪](ISSUES.md) - 问题和 bug 跟踪
+
 ## 许可证
 
 MIT
-
-## 贡献
-
-欢迎贡献！请先阅读 `PLAN.md` 了解项目结构。

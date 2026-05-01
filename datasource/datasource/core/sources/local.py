@@ -13,7 +13,7 @@ from llama_index.core import SimpleDirectoryReader
 
 from .base import BaseDataSource
 from ..models import SourceConfig
-from .mineru_reader import MinerUPDFReader
+from .mineru_reader import MinerUReader
 
 import logging
 logger = logging.getLogger(__name__)
@@ -62,10 +62,14 @@ class LocalDataSource(BaseDataSource):
             raise ValueError(f"Path is not a directory: {config.path}")
 
         # 初始化 MinerU PDF 阅读器
-        self.mineru_reader = MinerUPDFReader(
-            parse_images=False,
-            parse_tables=True,
-            use_ocr=True
+        self.mineru_reader = MinerUReader(
+            skip_toc=True,
+            min_page_length=50,
+            method="auto",
+            backend="pipeline",
+            lang="ch",
+            formula_enable=True,
+            table_enable=True
         )
 
     def fetch_raw(

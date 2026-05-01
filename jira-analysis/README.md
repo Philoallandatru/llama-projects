@@ -1,72 +1,78 @@
 # Jira Analysis System
 
-基于 LlamaIndex Workflows 的 Jira issue 深度分析系统。
+Jira issue 深度分析系统，基于 LlamaIndex Workflows。
+
+## 项目状态
+
+🚧 **Phase 1 开发中** | **设计文档**: `.planning/jira-analysis-design.md`
 
 ## 功能特性
 
-- **实时交互分析**: 输入 issue key，实时生成深度分析报告
-- **批量报告生成**: 支持批量分析多个 issues
-- **智能路由**: 根据 issue type 自动选择分析 profile（RCA、需求追溯、变更影响等）
-- **跨源证据检索**: 从 Jira/Confluence/规格文档索引中检索相关证据
-- **多模式分析**: strict/balanced/exploratory 三种分析模式
-- **本地 LLM**: 支持 Ollama/LM Studio 本地模型
+1. **实时交互分析**：输入 issue key，实时拉取并分析
+2. **批量报告生成**：分析多个 issues，生成汇总报告
+3. **Issue 类型路由**：根据 issue type 选择分析 profile（RCA、需求追溯、变更影响等）
+4. **跨源证据检索**：从 Jira、Confluence 和规格文档索引中检索证据
+5. **多模式分析**：strict/balanced/exploratory 三种模式
+6. **本地 LLM 支持**：支持 Ollama/LM Studio
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-cd jira-analysis
+cd jira-analysis/
 uv sync
 ```
 
 ### 2. 配置环境变量
 
-复制 `.env.example` 到 `.env` 并填写配置：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env` 文件：
+创建 `.env` 文件：
 
 ```bash
 # Jira 配置
 JIRA_SERVER=https://jira.example.com
 JIRA_EMAIL=user@example.com
-JIRA_TOKEN=your_token_here
+JIRA_TOKEN=your_token
 
-# LLM 配置
+# LLM 配置（本地模型）
 LLM_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=qwen2.5:14b
+LLM_TEMPERATURE=0.1
+LLM_MAX_TOKENS=4096
 
-# 索引路径（指向已有的索引）
+# 索引路径（指向 datasource 生成的索引）
 INDEX_BASE_PATH=../datasource/data/indexes
 ```
 
-### 3. 启动服务
-
-**启动 LlamaDeploy API 服务器**（终端 1）：
+### 3. 生成索引（依赖 datasource）
 
 ```bash
+# 先在 datasource 项目中生成索引
+cd ../datasource/
+uv run datasource sync jira --project PROJ
+uv run datasource index jira --strategy vector
+
+# 索引会保存在 datasource/data/indexes/jira/
+```
+
+### 4. 启动服务
+
+```bash
+cd ../jira-analysis/
+
+# 启动 LlamaDeploy API 服务器（终端 1）
 uv run -m llama_deploy.apiserver
-```
 
-**部署工作流**（终端 2）：
-
-```bash
+# 部署工作流（终端 2）
 uv run llamactl deploy llama_deploy.yml
+
+# 访问 UI
+# http://localhost:4501/deployments/jira-analysis/ui
 ```
-
-### 4. 访问 UI
-
-打开浏览器访问：
-- Deep Analysis: `http://localhost:4501/deployments/jira-analysis/ui`
-- API 文档: `http://localhost:4501/docs`
 
 ## 使用示例
 
-### 单个 Issue 分析
+### 深度分析单个 issue
 
 ```bash
 curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
@@ -83,7 +89,7 @@ curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
 curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"issue_keys\":[\"NVME-777\",\"NVME-778\"],\"mode\":\"balanced\"}",
+    "input": "{\"issue_keys\":[\"NVME-777\",\"NVME-778\"],\"mode\":\"strict\"}",
     "service_id": "batch-analysis"
   }'
 ```
@@ -92,10 +98,10 @@ curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
 
 系统根据 issue type 自动选择分析 profile：
 
-- **RCA (Root Cause Analysis)**: FW Bug, HW Bug, Test Bug
-- **Traceability**: DAS/PRD, MRD
-- **Change Impact**: Requirement Change, Component Change
-- **General**: 其他类型
+- **RCA（根因分析）**：FW Bug, HW Bug, Test Bug → 失效机制、根本原因、证据链
+- **Traceability（需求追溯）**：DAS/PRD, MRD → 需求覆盖、实现状态、差距分析
+- **Change Impact（变更影响）**：变更类 → 影响范围、风险评估、依赖分析
+- **General（通用分析）**：其他类型 → 问题概述、相关证据、分析结论
 
 ## 分析模式
 
@@ -108,22 +114,58 @@ curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
 ```
 jira-analysis/
 ├── src/
-│   ├── workflows/          # Workflow 定义
-│   ├── core/              # 核心组件
-│   ├── profiles/          # 分析 profiles 配置
-│   └── settings.py        # 配置管理
-├── ui/                    # TypeScript UI
-├── tests/                 # 测试
-└── llama_deploy.yml       # 部署配置
+│   ├── workflows/
+│   │   ├── deep_analysis.py          # 深度分析 workflow
+│   │   └── batch_analysis.py         # 批量分析 workflow
+│   ├── core/
+│   │   ├── issue_loader.py           # 实时加载 Jira issue
+│   │   ├── router.py                 # Issue type 路由
+│   │   ├── retriever.py              # 跨源证据检索
+│   │   ├── prompt_builder.py         # Prompt 构建
+│   │   └── llm_client.py             # LLM 调用封装
+│   ├── profiles/
+│   │   ├── config.json               # Issue type → profile 映射
+│   │   └── prompts/                  # Prompt 模板
+│   └── settings.py                   # 配置管理
+├── ui/                               # TypeScript UI
+├── tests/                            # 测试用例
+└── llama_deploy.yml                  # 部署配置
 ```
+
+## 工作流程
+
+### DeepAnalysisWorkflow（深度分析）
+
+1. **Load Issue**: 实时从 Jira API 拉取 issue 数据
+2. **Route Profile**: 根据 issue type 选择分析 profile
+3. **Retrieve Evidence**: 从索引中检索相似 issues 和相关文档
+4. **Generate Analysis**: 调用 LLM 生成分析报告（支持流式输出）
+5. **Format Output**: 格式化输出结果
+
+### BatchAnalysisWorkflow（批量分析）
+
+1. **Start**: 接收 issue keys 列表或 JQL 查询
+2. **Batch Analyze**: 并发分析多个 issues（控制并发数）
+3. **Generate Summary**: 生成汇总报告
+
+## 实现计划
+
+- ✅ **Phase 1**: 核心组件（IssueLoader, Router, Retriever, PromptBuilder, LLMClient）
+- 🚧 **Phase 2**: Deep Analysis Workflow
+- ⏳ **Phase 3**: Batch Analysis Workflow
+- ⏳ **Phase 4**: 配置和部署
+- ⏳ **Phase 5**: UI 和测试
 
 ## 测试
 
 ### 单元测试
 
 ```bash
-# 运行单元测试
-uv run pytest tests/ -v
+# 运行所有测试
+uv run pytest
+
+# 运行特定测试
+uv run pytest tests/test_router.py -v
 
 # 排除 E2E 测试
 uv run pytest tests/ -v --ignore=tests/e2e/
@@ -131,17 +173,15 @@ uv run pytest tests/ -v --ignore=tests/e2e/
 
 ### E2E 测试
 
-项目包含完整的端到端测试套件，使用 Playwright 进行 UI 测试。
-
 ```bash
 # 安装 E2E 测试依赖
 uv sync --extra e2e
 uv run playwright install chromium
 
-# 运行所有 E2E 测试
+# 运行 E2E 测试
 uv run pytest tests/e2e/ -v
 
-# 使用快速启动脚本（推荐）
+# 使用快速启动脚本
 bash scripts/run-e2e-tests.sh  # Linux/Mac
 scripts\run-e2e-tests.bat      # Windows
 ```
@@ -154,13 +194,17 @@ scripts\run-e2e-tests.bat      # Windows
 # 类型检查
 uv run mypy src/
 
-# 运行测试
-uv run pytest
-
 # 代码格式化
 uv run ruff format src/
 ```
 
-## License
+## 技术特点
+
+1. **实时数据拉取**：分析目标 issue 实时从 Jira API 拉取，确保数据最新
+2. **索引检索证据**：相似 issues 和文档从预建索引中检索，提升性能
+3. **配置驱动**：通过 `profiles/config.json` 配置 issue type 路由规则
+4. **流式输出**：支持流式生成，实时 UI 反馈
+
+## 许可证
 
 MIT

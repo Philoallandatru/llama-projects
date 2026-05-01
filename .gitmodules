@@ -1,3 +1,12 @@
+[submodule "chat"]
+	path = chat
+	url = ./chat
+[submodule "data-explore"]
+	path = data-explore
+	url = ./data-explore
+[submodule "deep-serach"]
+	path = deep-serach
+	url = ./deep-serach
 [submodule "requirement-tracing"]
 	path = requirement-tracing
 	url = ./requirement-tracing

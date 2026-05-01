@@ -1,35 +1,93 @@
 # Jira Analysis 配置文件示例
 # 复制此文件为 config.yaml 并填入你的实际配置
 
-# Jira 配置
-jira:
-  server: "https://jira.example.com"
-  email: "user@example.com"
-  token: "your_token_here"
+# ============================================================
+# 方案 1: 使用 LM Studio + 真实数据（推荐用于本地测试）
+# ============================================================
 
-# LLM 配置
+# Jira 配置（填入你的真实凭证）
+jira:
+  server: "https://your-company.atlassian.net"  # 你的 Jira Server URL
+  email: "your-email@company.com"               # 你的邮箱
+  token: "your-api-token-here"                  # 从 Jira 账户设置生成的 API Token
+
+# LLM 配置（LM Studio）
 llm:
-  base_url: "http://localhost:11434/v1"  # Ollama 默认地址
-  model: "qwen2.5:14b"
+  base_url: "http://localhost:1234/v1"  # LM Studio 默认地址
+  model: "qwen2.5-14b-instruct"         # 你在 LM Studio 中加载的模型名称
   temperature: 0.1
   max_tokens: 4096
-  api_key: "ollama"  # Ollama 不需要真实 API key，但某些客户端需要非空值
+  api_key: "lm-studio"                  # LM Studio 不需要真实 key
 
 # 索引配置
 index:
   base_path: "../datasource/data/indexes"
-  # 可用的索引类型
+  # 可用的索引类型（需要先用 datasource 构建）
   sources:
-    - jira
-    - confluence
-    - specs
+    - jira      # Jira issues 索引
+    - specs     # 规格文档索引（PDF/Excel/Word）
 
-# 本地测试模式配置
+# 本地测试模式（使用真实数据时设为 false）
 local_test:
-  enabled: true
-  # 使用本地 mock 数据而不是真实 Jira
-  use_mock_data: true
-  mock_data_path: "./tests/fixtures"
+  enabled: false
+  use_mock_data: false
+
+# ============================================================
+# 方案 2: 使用 OpenAI API（生产环境）
+# ============================================================
+
+# jira:
+#   server: "https://your-company.atlassian.net"
+#   email: "your-email@company.com"
+#   token: "your-api-token-here"
+
+# llm:
+#   base_url: "https://api.openai.com/v1"
+#   model: "gpt-4"
+#   temperature: 0.1
+#   max_tokens: 4096
+#   api_key: "sk-your-openai-api-key"
+
+# index:
+#   base_path: "/path/to/production/indexes"
+#   sources:
+#     - jira
+#     - confluence
+#     - specs
+
+# local_test:
+#   enabled: false
+#   use_mock_data: false
+
+# ============================================================
+# 方案 3: Mock 数据测试（无需 Jira/LLM）
+# ============================================================
+
+# jira:
+#   server: "https://jira.example.com"
+#   email: "test@example.com"
+#   token: "fake-token"
+
+# llm:
+#   base_url: "http://localhost:1234/v1"
+#   model: "qwen2.5-14b-instruct"
+#   temperature: 0.1
+#   max_tokens: 4096
+#   api_key: "lm-studio"
+
+# index:
+#   base_path: "./tests/fixtures/indexes"
+#   sources:
+#     - jira
+
+# local_test:
+#   enabled: true
+#   use_mock_data: true
+#   mock_data_path: "./tests/fixtures"
+
+# ============================================================
+# 通用配置
+# ============================================================
 
 # 日志配置
 logging:

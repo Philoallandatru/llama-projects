@@ -114,13 +114,13 @@ async def page(context: BrowserContext) -> AsyncGenerator[Page, None]:
     await page.close()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def base_url() -> str:
     """基础 URL"""
     return "http://localhost:4501"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def ui_url(base_url: str) -> str:
     """UI URL"""
     return f"{base_url}/deployments/jira-analysis/ui"

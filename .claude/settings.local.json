@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf chat/.git data-explore/.git deep-serach/.git)",
+      "Bash(git add *)"
+    ]
+  }
+}

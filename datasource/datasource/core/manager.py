@@ -18,6 +18,9 @@ from .sources.confluence import ConfluenceDataSource
 from .indexing.vector import VectorIndexer
 from .indexing.bm25 import BM25Indexer
 from .indexing.hybrid import HybridRetriever
+from .metadata.metadata_index import MetadataIndex
+import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,11 @@ class SourceManager:
         self.data_dir = Path(data_dir) if data_dir else Path("data")
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.paths = Paths(self.data_dir)
+
+        # 初始化元数据索引
+        metadata_db_path = self.data_dir / "metadata.db"
+        self.metadata_index = MetadataIndex(metadata_db_path)
+
         logger.info(f"SourceManager initialized with data_dir: {self.data_dir}")
 
     def add_source(self, config: SourceConfig) -> SourceInfo:
@@ -211,7 +219,13 @@ class SourceManager:
                     # 2. 构建文档
                     doc = source.build_document(item_id, raw_data, assets_dir)
 
-                    # 3. 保存文档
+                    # 3. 提取并存储元数据（如果是 Jira/Confluence）
+                    if config.type == SourceType.JIRA:
+                        self.metadata_index.add_jira_metadata(item_id, doc.metadata)
+                    elif config.type == SourceType.CONFLUENCE:
+                        self.metadata_index.add_confluence_metadata(item_id, doc.metadata)
+
+                    # 4. 保存文档
                     doc_file = doc_dir / f"{source._sanitize_filename(item_id)}.json"
                     doc_file.write_text(doc.to_json(), encoding="utf-8")
                     doc_count += 1
@@ -261,7 +275,8 @@ class SourceManager:
         name: str,
         query: str,
         mode: str = "hybrid",
-        top_k: int = 5
+        top_k: int = 5,
+        filter_doc_ids: Optional[List[str]] = None
     ) -> List[dict]:
         """查询数据源
 
@@ -270,6 +285,7 @@ class SourceManager:
             query: 查询字符串
             mode: 检索模式 - "hybrid", "vector", "bm25"
             top_k: 返回结果数量
+            filter_doc_ids: 可选的文档 ID 列表，只在这些文档中检索
 
         Returns:
             查询结果列表
@@ -304,8 +320,8 @@ class SourceManager:
             top_k=top_k
         )
 
-        # 执行检索
-        results = retriever.retrieve(query, mode=mode)
+        # 执行检索（传递 filter_doc_ids）
+        results = retriever.retrieve(query, mode=mode, filter_doc_ids=filter_doc_ids)
 
         # 转换为字典格式
         output = []

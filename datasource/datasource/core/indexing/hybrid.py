@@ -103,37 +103,41 @@ class HybridRetriever:
         self,
         query: str,
         mode: str = "hybrid",
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        filter_doc_ids: Optional[List[str]] = None
     ) -> List[NodeWithScore]:
         """执行检索
 
         Args:
             query: 查询字符串
             mode: 检索模式 - "hybrid", "vector", "bm25"
-            filters: 元数据过滤条件
+            filters: 元数据过滤条件（字段级别）
+            filter_doc_ids: 文档 ID 白名单，只在这些文档中检索
 
         Returns:
             检索结果列表（NodeWithScore）
         """
         if mode == "vector":
-            return self._retrieve_vector(query, filters)
+            return self._retrieve_vector(query, filters, filter_doc_ids)
         elif mode == "bm25":
-            return self._retrieve_bm25(query, filters)
+            return self._retrieve_bm25(query, filters, filter_doc_ids)
         elif mode == "hybrid":
-            return self._retrieve_hybrid(query, filters)
+            return self._retrieve_hybrid(query, filters, filter_doc_ids)
         else:
             raise ValueError(f"不支持的检索模式: {mode}")
 
     def _retrieve_vector(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        filter_doc_ids: Optional[List[str]] = None
     ) -> List[NodeWithScore]:
         """向量检索
 
         Args:
             query: 查询字符串
             filters: 元数据过滤条件
+            filter_doc_ids: 文档 ID 白名单
 
         Returns:
             检索结果列表
@@ -149,7 +153,11 @@ class HybridRetriever:
 
         results = retriever.retrieve(query)
 
-        # 手动应用过滤器
+        # 应用文档 ID 过滤
+        if filter_doc_ids:
+            results = self._apply_doc_id_filter(results, filter_doc_ids)
+
+        # 手动应用字段过滤器
         if filters:
             results = self._apply_filters(results, filters)
 
@@ -159,13 +167,15 @@ class HybridRetriever:
     def _retrieve_bm25(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        filter_doc_ids: Optional[List[str]] = None
     ) -> List[NodeWithScore]:
         """BM25 检索
 
         Args:
             query: 查询字符串
             filters: 元数据过滤条件
+            filter_doc_ids: 文档 ID 白名单
 
         Returns:
             检索结果列表
@@ -178,7 +188,11 @@ class HybridRetriever:
         query_bundle = QueryBundle(query_str=query)
         results = self.bm25_retriever.retrieve(query_bundle)
 
-        # 应用过滤器（如果有）
+        # 应用文档 ID 过滤
+        if filter_doc_ids:
+            results = self._apply_doc_id_filter(results, filter_doc_ids)
+
+        # 应用字段过滤器（如果有）
         if filters:
             results = self._apply_filters(results, filters)
 
@@ -188,20 +202,22 @@ class HybridRetriever:
     def _retrieve_hybrid(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        filter_doc_ids: Optional[List[str]] = None
     ) -> List[NodeWithScore]:
         """混合检索
 
         Args:
             query: 查询字符串
             filters: 元数据过滤条件
+            filter_doc_ids: 文档 ID 白名单
 
         Returns:
             检索结果列表
         """
         # 获取两种检索结果
-        vector_results = self._retrieve_vector(query, filters)
-        bm25_results = self._retrieve_bm25(query, filters)
+        vector_results = self._retrieve_vector(query, filters, filter_doc_ids)
+        bm25_results = self._retrieve_bm25(query, filters, filter_doc_ids)
 
         # 合并和重新评分
         combined = self._combine_results(vector_results, bm25_results)
@@ -281,4 +297,36 @@ class HybridRetriever:
             if match:
                 filtered.append(node_with_score)
 
+        return filtered
+
+    def _apply_doc_id_filter(
+        self,
+        results: List[NodeWithScore],
+        filter_doc_ids: List[str]
+    ) -> List[NodeWithScore]:
+        """应用文档 ID 过滤
+
+        Args:
+            results: 检索结果
+            filter_doc_ids: 允许的文档 ID 列表
+
+        Returns:
+            过滤后的结果
+        """
+        if not filter_doc_ids:
+            return results
+
+        # 转换为集合以提高查找效率
+        allowed_ids = set(filter_doc_ids)
+
+        filtered = []
+        for node_with_score in results:
+            # 检查 node_id 或 metadata 中的 doc_id
+            node_id = node_with_score.node.node_id
+            doc_id = node_with_score.node.metadata.get("doc_id", node_id)
+
+            if doc_id in allowed_ids or node_id in allowed_ids:
+                filtered.append(node_with_score)
+
+        logger.info(f"Doc ID filter: {len(results)} -> {len(filtered)} results")
         return filtered

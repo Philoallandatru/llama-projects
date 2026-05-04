@@ -10,12 +10,16 @@ services:
     name: deep-analysis
     source:
       type: local
-      name: workflows.deep_analysis:DeepAnalysisWorkflow
+      name: src.workflows.deep_analysis:DeepAnalysisWorkflow
     path: /deep-analysis
+    port: 8001
+    host: 0.0.0.0
 
   batch-analysis:
     name: batch-analysis
     source:
       type: local
-      name: workflows.batch_analysis:BatchAnalysisWorkflow
+      name: src.workflows.batch_analysis:BatchAnalysisWorkflow
     path: /batch-analysis
+    port: 8002
+    host: 0.0.0.0

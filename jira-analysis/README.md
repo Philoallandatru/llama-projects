@@ -74,12 +74,12 @@ uv run -m llama_deploy.apiserver
 uv run llamactl deploy llama_deploy.yml
 
 # 启动 UI（终端 3）
-# 默认端口: 3000 (如果被占用，使用 npm run dev -- -p 3001)
+# 默认端口: 3001 (避免与其他项目冲突)
 cd ui-next/
 npm run dev
 
 # 访问 UI
-# http://localhost:3000
+# http://localhost:3001
 ```
 
 ## 使用示例

@@ -116,14 +116,14 @@ async def page(context: BrowserContext) -> AsyncGenerator[Page, None]:
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
-    """基础 URL"""
+    """LlamaDeploy API 基础 URL"""
     return "http://localhost:8100"
 
 
 @pytest.fixture(scope="session")
-def ui_url(base_url: str) -> str:
-    """UI URL"""
-    return f"{base_url}/deployments/jira-analysis/ui"
+def ui_url() -> str:
+    """UI URL (独立 Next.js 服务)"""
+    return "http://localhost:3001"
 
 
 @pytest.fixture

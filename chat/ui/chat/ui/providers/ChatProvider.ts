@@ -3,6 +3,24 @@ import type { XRequestOptions } from '@ant-design/x-sdk';
 import type { TransformMessage } from '@ant-design/x-sdk';
 import type { ChatMessage, ChatInput, ChatOutput } from '@/lib/types';
 
+const DEFAULT_TOP_K = 3;
+
+/**
+ * 解析 SSE chunk 数据
+ */
+function parseSSEChunk(chunk: any): { content?: string; citations?: any[] } {
+  if (!chunk?.data) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(chunk.data);
+  } catch (e) {
+    console.error('[ChatProvider] Failed to parse SSE chunk:', e);
+    return {};
+  }
+}
+
 /**
  * SSD Quality Platform Chat Provider
  * 处理与后端 FastAPI 的通信和数据转换
@@ -12,84 +30,50 @@ export class SSDChatProvider extends AbstractChatProvider<
   ChatInput,
   ChatOutput
 > {
-  /**
-   * 转换请求参数
-   * 将前端的请求参数转换为后端 API 需要的格式
-   */
   transformParams(
     requestParams: Partial<ChatInput>,
     options: XRequestOptions<ChatInput, ChatOutput, ChatMessage>
   ): any {
-    console.log('[ChatProvider] transformParams called:', requestParams, options);
-    // 后端期望 snake_case: datasources, 不是 dataSources
-    const params = {
+    return {
+      ...options.params,
       query: requestParams.query || '',
       datasources: requestParams.dataSources || [],
-      top_k: 3,
-      ...options.params,
+      top_k: DEFAULT_TOP_K,
     };
-    console.log('[ChatProvider] Transformed params:', params);
-    return params;
   }
 
-  /**
-   * 转换本地消息（用户发送的消息）
-   * 用于在 UI 中立即显示用户输入
-   */
   transformLocalMessage(requestParams: Partial<ChatInput>): ChatMessage {
-    console.log('[ChatProvider] transformLocalMessage called:', requestParams);
-    const message = {
+    return {
       role: 'user',
       content: requestParams.query || '',
       timestamp: Date.now(),
     };
-    console.log('[ChatProvider] Local message:', message);
-    return message;
   }
 
-  /**
-   * 转换响应消息
-   * 处理流式响应，累积内容并提取引用
-   */
   transformMessage(info: TransformMessage<ChatMessage, ChatOutput>): ChatMessage {
-    console.log('[ChatProvider] transformMessage called:', info);
-    const { originMessage, chunk, chunks, responseHeaders } = info;
+    const { originMessage, chunk } = info;
 
-    // 累积内容
     let content = originMessage?.content || '';
     let citations = originMessage?.citations;
 
     if (chunk) {
-      console.log('[ChatProvider] Processing chunk:', chunk);
+      const parsed = parseSSEChunk(chunk);
 
-      // chunk.data 是 JSON 字符串，需要解析
-      if (chunk.data) {
-        try {
-          const parsed = JSON.parse(chunk.data);
-          console.log('[ChatProvider] Parsed chunk data:', parsed);
+      if (parsed.content) {
+        content += parsed.content;
+      }
 
-          if (parsed.content) {
-            content += parsed.content;
-          }
-
-          if (parsed.citations) {
-            citations = parsed.citations;
-          }
-        } catch (e) {
-          console.error('[ChatProvider] Failed to parse chunk.data:', e);
-        }
+      if (parsed.citations) {
+        citations = parsed.citations;
       }
     }
 
-    const result = {
+    return {
       role: 'assistant',
       content,
       citations,
       timestamp: Date.now(),
     };
-
-    console.log('[ChatProvider] Returning message:', result);
-    return result;
   }
 }
 

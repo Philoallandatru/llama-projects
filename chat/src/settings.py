@@ -16,7 +16,6 @@ def load_config():
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-
 def init_settings():
     """初始化 LLM 和 Embedding 设置"""
     config = load_config()

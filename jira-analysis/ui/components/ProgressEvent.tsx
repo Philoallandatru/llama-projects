@@ -3,6 +3,7 @@ import { EventComponent } from "@llamaindex/server/ui";
 interface ProgressEventData {
   stage: string;
   message: string;
+  status?: 'pending' | 'inprogress' | 'done' | 'error';
 }
 
 export default function ProgressEvent({ data }: EventComponent<ProgressEventData>) {
@@ -15,11 +16,12 @@ export default function ProgressEvent({ data }: EventComponent<ProgressEventData
   };
 
   const emoji = stageEmoji[data.stage] || "⚙️";
+  const status = data.status || 'inprogress';
 
   return (
-    <div className="progress-event">
+    <div className={`progress-event status-${status}`}>
       <span className="stage-emoji">{emoji}</span>
-      <span className="stage-name">{data.stage}</span>
+      <span className="stage-name">{data.stage.replace(/_/g, ' ')}</span>
       <span className="message">{data.message}</span>
     </div>
   );

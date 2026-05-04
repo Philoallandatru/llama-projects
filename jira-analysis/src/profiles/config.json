@@ -2,31 +2,74 @@
   "profiles": {
     "rca": {
       "name": "rca",
-      "description": "Root Cause Analysis - 根因分析",
-      "issue_types": ["FW Bug", "HW Bug", "Test Bug", "Bug"],
-      "prompt_template": "prompts/rca.txt",
-      "output_sections": ["概述", "跨源证据", "根因分析", "差距", "建议"]
+      "description": "根因分析 (Root Cause Analysis)",
+      "issue_types": [
+        "FW Bug",
+        "HW Bug",
+        "Test Bug",
+        "Bug",
+        "Defect"
+      ],
+      "prompt_template": "rca",
+      "output_sections": [
+        "失效机制",
+        "根本原因",
+        "证据链",
+        "差距分析",
+        "建议"
+      ]
     },
     "traceability": {
       "name": "traceability",
-      "description": "Requirements Traceability - 需求追溯",
-      "issue_types": ["DAS/PRD", "MRD", "Requirement"],
-      "prompt_template": "prompts/traceability.txt",
-      "output_sections": ["概述", "跨源证据", "追溯分析", "差距", "建议"]
+      "description": "需求追溯 (Requirements Traceability)",
+      "issue_types": [
+        "DAS/PRD",
+        "MRD",
+        "Requirement",
+        "Feature Request",
+        "Story"
+      ],
+      "prompt_template": "traceability",
+      "output_sections": [
+        "需求概述",
+        "实现覆盖",
+        "差距分析",
+        "建议"
+      ]
     },
     "change_impact": {
       "name": "change_impact",
-      "description": "Change Impact Analysis - 变更影响分析",
-      "issue_types": ["Requirement Change", "Component Change", "Change Request"],
-      "prompt_template": "prompts/change_impact.txt",
-      "output_sections": ["概述", "跨源证据", "影响分析", "差距", "建议"]
+      "description": "变更影响分析 (Change Impact Analysis)",
+      "issue_types": [
+        "Change Request",
+        "Enhancement",
+        "Improvement"
+      ],
+      "prompt_template": "change_impact",
+      "output_sections": [
+        "变更概述",
+        "影响范围",
+        "风险评估",
+        "依赖分析",
+        "建议"
+      ]
     },
     "general": {
       "name": "general",
-      "description": "General Analysis - 通用分析",
-      "issue_types": [],
-      "prompt_template": "prompts/general.txt",
-      "output_sections": ["概述", "跨源证据", "分析", "差距", "建议"]
+      "description": "通用分析 (General Analysis)",
+      "issue_types": [
+        "Task",
+        "Sub-task",
+        "Epic",
+        "Other"
+      ],
+      "prompt_template": "general",
+      "output_sections": [
+        "问题概述",
+        "相关证据",
+        "分析结论",
+        "建议"
+      ]
     }
   },
   "default_profile": "general"

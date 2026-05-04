@@ -172,7 +172,7 @@ async def test_route_profile_step(mock_jira_config, mock_llm_config, mock_profil
             }
         },
         "default_profile": "rca"
-    }""")
+    }""", encoding="utf-8")
     
     workflow = DeepAnalysisWorkflow(
         jira_config=mock_jira_config,

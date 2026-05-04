@@ -4,13 +4,13 @@ Jira issue 深度分析系统，基于 LlamaIndex Workflows。
 
 ## 项目状态
 
-✅ **Phase 3 已完成** | **进度**: 60% (3/5)
+✅ **Phase 4 已完成** | **进度**: 80% (4/5)
 
 - ✅ Phase 1: 核心组件
 - ✅ Phase 2: Deep Analysis Workflow
 - ✅ Phase 3: Batch Analysis Workflow
-- ⏳ Phase 4: 配置和部署
-- ⏳ Phase 5: UI 和测试
+- ✅ Phase 4: E2E Testing and Validation
+- ⏳ Phase 5: UI Optimization and Deployment
 
 ## 功能特性
 
@@ -67,13 +67,19 @@ uv run datasource index jira --strategy vector
 cd ../jira-analysis/
 
 # 启动 LlamaDeploy API 服务器（终端 1）
+# 默认端口: 8100 (如果被占用，可在 llama_deploy.yml 中修改)
 uv run -m llama_deploy.apiserver
 
 # 部署工作流（终端 2）
 uv run llamactl deploy llama_deploy.yml
 
+# 启动 UI（终端 3）
+# 默认端口: 3000 (如果被占用，使用 npm run dev -- -p 3001)
+cd ui-next/
+npm run dev
+
 # 访问 UI
-# http://localhost:8000/deployments/jira-analysis/ui
+# http://localhost:3000
 ```
 
 ## 使用示例
@@ -81,7 +87,7 @@ uv run llamactl deploy llama_deploy.yml
 ### 深度分析单个 issue
 
 ```bash
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:8100/deployments/jira-analysis/tasks/create' \
   -H 'Content-Type: application/json' \
   -d '{
     "input": "{\"issue_key\":\"NVME-777\",\"mode\":\"balanced\"}",
@@ -93,7 +99,7 @@ curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
 
 ```bash
 # 使用 issue keys 列表
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:8100/deployments/jira-analysis/tasks/create' \
   -H 'Content-Type: application/json' \
   -d '{
     "input": "{\"issue_keys\":[\"NVME-777\",\"NVME-778\"],\"mode\":\"balanced\",\"max_concurrent\":3}",
@@ -101,7 +107,7 @@ curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
   }'
 
 # 使用 JQL 查询
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:8100/deployments/jira-analysis/tasks/create' \
   -H 'Content-Type: application/json' \
   -d '{
     "input": "{\"jql\":\"project=NVME AND created>=2024-01-01\",\"mode\":\"balanced\"}",

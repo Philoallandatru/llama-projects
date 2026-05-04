@@ -44,7 +44,7 @@ def llama_deploy_process(project_root: Path) -> Generator[subprocess.Popen, None
     max_retries = 10
     for i in range(max_retries):
         try:
-            response = requests.get("http://localhost:4501/docs")
+            response = requests.get("http://localhost:8100/docs")
             if response.status_code == 200:
                 break
         except requests.exceptions.ConnectionError:
@@ -117,7 +117,7 @@ async def page(context: BrowserContext) -> AsyncGenerator[Page, None]:
 @pytest.fixture(scope="session")
 def base_url() -> str:
     """基础 URL"""
-    return "http://localhost:4501"
+    return "http://localhost:8100"
 
 
 @pytest.fixture(scope="session")

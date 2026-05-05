@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { navigateAndWaitForHydration } from '../helpers/wait-for-hydration';
 
 test.describe('API Integration', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await navigateAndWaitForHydration(page);
   });
 
   test('should load the application successfully', async ({ page }) => {
@@ -21,7 +21,7 @@ test.describe('API Integration', () => {
       }
     });
 
-    await page.goto('/');
+    // Page already navigated in beforeEach, just wait for any additional network activity
     await page.waitForLoadState('networkidle');
 
     // Filter out known acceptable errors (like network errors when backend is down)

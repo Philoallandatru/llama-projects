@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { navigateAndWaitForHydration } from '../helpers/wait-for-hydration';
 
 test.describe('Header Component', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for page to load
-    await page.waitForLoadState('networkidle');
+    await navigateAndWaitForHydration(page);
   });
 
   test('should display header area', async ({ page }) => {
@@ -42,9 +41,8 @@ test.describe('Header Component', () => {
     const body = page.locator('body');
     await expect(body).toBeVisible();
 
-    // Check for main content area - should have at least one
-    const mainContent = page.locator('main, [role="main"], div[class*="main"]');
-    const hasMainContent = await mainContent.count();
-    expect(hasMainContent).toBeGreaterThan(0);
+    // Verify the page has hydrated and contains interactive elements
+    const textarea = page.locator('textarea[name="input"]');
+    await expect(textarea).toBeVisible();
   });
 });

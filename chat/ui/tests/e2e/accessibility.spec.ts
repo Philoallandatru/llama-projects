@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { navigateAndWaitForHydration } from '../helpers/wait-for-hydration';
 
 test.describe('Accessibility', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await navigateAndWaitForHydration(page);
   });
 
   test('should have at least one heading', async ({ page }) => {

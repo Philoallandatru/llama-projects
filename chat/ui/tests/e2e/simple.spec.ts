@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { navigateAndWaitForHydration } from '../helpers/wait-for-hydration';
 
 test('simple navigation test', async ({ page }) => {
-  // Use relative path to leverage baseURL
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await navigateAndWaitForHydration(page);
 
   // Check that page loaded
   const body = page.locator('body');

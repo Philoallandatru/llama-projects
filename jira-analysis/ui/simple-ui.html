@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Analysis - Simple UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result.active {
+            display: block;
+        }
+
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .result pre {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .error {
+            background: #fee;
+            border-left-color: #f44336;
+        }
+
+        .error h3 {
+            color: #f44336;
+        }
+
+        .starter-questions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 8px;
+        }
+
+        .starter-questions h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .starter-questions button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            margin-bottom: 8px;
+            padding: 10px 15px;
+            background: white;
+            color: #333;
+            font-size: 14px;
+            font-weight: normal;
+        }
+
+        .starter-questions button:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Jira Analysis</h1>
+            <p>深度分析 Jira Issues，提供智能洞察</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('single')">单个分析</button>
+                <button class="tab" onclick="switchTab('batch')">批量分析</button>
+            </div>
+
+            <!-- Single Analysis Tab -->
+            <div id="single-tab" class="tab-content active">
+                <form id="single-form" onsubmit="analyzeSingle(event)">
+                    <div class="form-group">
+                        <label for="issue-key">Issue Key *</label>
+                        <input type="text" id="issue-key" placeholder="例如: NVME-777" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="analysis-focus">分析重点（可选）</label>
+                        <textarea id="analysis-focus" placeholder="例如: 关注性能问题和根本原因"></textarea>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="strict-mode">
+                        <label for="strict-mode" style="margin: 0;">严格模式（更详细的分析）</label>
+                    </div>
+
+                    <button type="submit" id="single-submit">开始分析</button>
+                </form>
+
+                <div class="starter-questions">
+                    <h4>快速开始：</h4>
+                    <button onclick="fillSingleForm('NVME-777', '')">分析 issue NVME-777</button>
+                    <button onclick="fillSingleForm('PROJ-123', '', true)">使用严格模式分析 PROJ-123</button>
+                </div>
+
+                <div id="single-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>正在分析中，请稍候...</p>
+                </div>
+
+                <div id="single-result" class="result"></div>
+            </div>
+
+            <!-- Batch Analysis Tab -->
+            <div id="batch-tab" class="tab-content">
+                <form id="batch-form" onsubmit="analyzeBatch(event)">
+                    <div class="form-group">
+                        <label for="issue-keys">Issue Keys * (用逗号分隔)</label>
+                        <input type="text" id="issue-keys" placeholder="例如: NVME-777, NVME-778, NVME-779" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batch-analysis-focus">分析重点（可选）</label>
+                        <textarea id="batch-analysis-focus" placeholder="例如: 识别共同模式和趋势"></textarea>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="batch-strict-mode">
+                        <label for="batch-strict-mode" style="margin: 0;">严格模式（更详细的分析）</label>
+                    </div>
+
+                    <button type="submit" id="batch-submit">开始批量分析</button>
+                </form>
+
+                <div class="starter-questions">
+                    <h4>快速开始：</h4>
+                    <button onclick="fillBatchForm('NVME-777, NVME-778, NVME-779', '')">批量分析 NVME-777, NVME-778, NVME-779</button>
+                </div>
+
+                <div id="batch-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>正在批量分析中，请稍候...</p>
+                </div>
+
+                <div id="batch-result" class="result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4501';
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${tab}-tab`).classList.add('active');
+
+            // Clear results
+            document.getElementById('single-result').classList.remove('active');
+            document.getElementById('batch-result').classList.remove('active');
+        }
+
+        function fillSingleForm(issueKey, focus, strict = false) {
+            document.getElementById('issue-key').value = issueKey;
+            document.getElementById('analysis-focus').value = focus;
+            document.getElementById('strict-mode').checked = strict;
+        }
+
+        function fillBatchForm(issueKeys, focus, strict = false) {
+            document.getElementById('issue-keys').value = issueKeys;
+            document.getElementById('batch-analysis-focus').value = focus;
+            document.getElementById('batch-strict-mode').checked = strict;
+        }
+
+        async function analyzeSingle(event) {
+            event.preventDefault();
+
+            const issueKey = document.getElementById('issue-key').value.trim();
+            const analysisFocus = document.getElementById('analysis-focus').value.trim();
+            const strictMode = document.getElementById('strict-mode').checked;
+
+            const loading = document.getElementById('single-loading');
+            const result = document.getElementById('single-result');
+            const submitBtn = document.getElementById('single-submit');
+
+            loading.classList.add('active');
+            result.classList.remove('active');
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        issue_key: issueKey,
+                        analysis_focus: analysisFocus || undefined,
+                        strict_mode: strictMode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    result.innerHTML = `
+                        <h3>✅ 分析完成</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    result.classList.remove('error');
+                } else {
+                    throw new Error(data.detail || '分析失败');
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <h3>❌ 错误</h3>
+                    <pre>${error.message}</pre>
+                `;
+                result.classList.add('error');
+            } finally {
+                loading.classList.remove('active');
+                result.classList.add('active');
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function analyzeBatch(event) {
+            event.preventDefault();
+
+            const issueKeysStr = document.getElementById('issue-keys').value.trim();
+            const issueKeys = issueKeysStr.split(',').map(k => k.trim()).filter(k => k);
+            const analysisFocus = document.getElementById('batch-analysis-focus').value.trim();
+            const strictMode = document.getElementById('batch-strict-mode').checked;
+
+            const loading = document.getElementById('batch-loading');
+            const result = document.getElementById('batch-result');
+            const submitBtn = document.getElementById('batch-submit');
+
+            loading.classList.add('active');
+            result.classList.remove('active');
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/batch-analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        issue_keys: issueKeys,
+                        analysis_focus: analysisFocus || undefined,
+                        strict_mode: strictMode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    result.innerHTML = `
+                        <h3>✅ 批量分析完成</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    result.classList.remove('error');
+                } else {
+                    throw new Error(data.detail || '批量分析失败');
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <h3>❌ 错误</h3>
+                    <pre>${error.message}</pre>
+                `;
+                result.classList.add('error');
+            } finally {
+                loading.classList.remove('active');
+                result.classList.add('active');
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Check API health on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (!response.ok) {
+                    console.warn('API health check failed');
+                }
+            } catch (error) {
+                console.error('Cannot connect to API:', error);
+                alert('警告：无法连接到 API 服务器。请确保后端服务正在运行。');
+            }
+        });
+    </script>
+</body>
+</html>

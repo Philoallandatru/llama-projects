@@ -219,7 +219,6 @@ class JiraDataSource(BaseDataSource):
         all_issues = []
 
         while True:
-            # 使用 jql 方法分页获取
             result = self.jira_client.jql(
                 jql=jql,
                 start=start_at,
@@ -233,7 +232,6 @@ class JiraDataSource(BaseDataSource):
 
             all_issues.extend(issues)
 
-            # 检查是否还有更多数据
             total = result.get("total", 0)
             if start_at + len(issues) >= total:
                 break

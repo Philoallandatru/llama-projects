@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from llama_index.core.workflow import draw_all_possible_flows
+# from llama_index.core.workflow import draw_all_possible_flows  # TODO: Not available in current llama-index version
 
 from .settings import init_settings
 from .workflows.deep_analysis import DeepAnalysisWorkflow
@@ -111,8 +111,10 @@ def visualize(workflow: str, output: str):
     else:
         wf = BatchAnalysisWorkflow()
 
-    draw_all_possible_flows(wf, filename=output)
-    click.echo(f"Workflow visualization saved to {output}")
+    # TODO: draw_all_possible_flows not available in current llama-index version
+    # draw_all_possible_flows(wf, filename=output)
+    click.echo(f"Workflow visualization not available in current llama-index version")
+    click.echo(f"Workflow object created: {wf.__class__.__name__}")
 
 
 @cli.command()

@@ -4,12 +4,12 @@ Jira issue 深度分析系统，基于 LlamaIndex Workflows。
 
 ## 项目状态
 
-✅ **Phase 3 已完成** | **进度**: 60% (3/5)
+✅ **Phase 4 已完成** | **进度**: 80% (4/5)
 
 - ✅ Phase 1: 核心组件
 - ✅ Phase 2: Deep Analysis Workflow
 - ✅ Phase 3: Batch Analysis Workflow
-- ⏳ Phase 4: 配置和部署
+- ✅ Phase 4: 配置和部署（FastAPI 服务器）
 - ⏳ Phase 5: UI 和测试
 
 ## 功能特性
@@ -66,14 +66,14 @@ uv run datasource index jira --strategy vector
 ```bash
 cd ../jira-analysis/
 
-# 启动 LlamaDeploy API 服务器（终端 1）
-uv run -m llama_deploy.apiserver
+# 启动 FastAPI 服务器（终端 1）
+uv run uvicorn src.api_server:app --host 0.0.0.0 --port 4501
 
-# 部署工作流（终端 2）
-uv run llamactl deploy llama_deploy.yml
+# 启动简单 UI（终端 2，可选）
+cd ui && python -m http.server 3001
 
 # 访问 UI
-# http://localhost:8000/deployments/jira-analysis/ui
+# http://localhost:3001/simple-ui.html
 ```
 
 ## 使用示例
@@ -81,11 +81,12 @@ uv run llamactl deploy llama_deploy.yml
 ### 深度分析单个 issue
 
 ```bash
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:4501/api/analyze' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"issue_key\":\"NVME-777\",\"mode\":\"balanced\"}",
-    "service_id": "deep-analysis"
+    "issue_key": "NVME-777",
+    "mode": "balanced",
+    "retrieve_evidence": true
   }'
 ```
 
@@ -93,21 +94,28 @@ curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
 
 ```bash
 # 使用 issue keys 列表
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:4501/api/batch-analyze' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"issue_keys\":[\"NVME-777\",\"NVME-778\"],\"mode\":\"balanced\",\"max_concurrent\":3}",
-    "service_id": "batch-analysis"
+    "issue_keys": ["NVME-777", "NVME-778"],
+    "mode": "balanced",
+    "max_concurrent": 3,
+    "generate_summary": true
   }'
 
 # 使用 JQL 查询
-curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:4501/api/batch-analyze' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"jql\":\"project=NVME AND created>=2024-01-01\",\"mode\":\"balanced\"}",
-    "service_id": "batch-analysis"
+    "jql": "project=NVME AND created>=2024-01-01",
+    "mode": "balanced",
+    "max_concurrent": 3
   }'
 ```
+
+### 使用 Web UI
+
+访问 http://localhost:3001/simple-ui.html 使用图形界面进行分析。
 
 ## 分析 Profiles
 
@@ -131,6 +139,7 @@ curl -X POST 'http://localhost:8000/deployments/jira-analysis/tasks/create' \
 ```
 jira-analysis/
 ├── src/
+│   ├── api_server.py                 # ✅ FastAPI 服务器
 │   ├── workflows/
 │   │   ├── deep_analysis.py          # ✅ 深度分析 workflow
 │   │   └── batch_analysis.py         # ✅ 批量分析 workflow
@@ -148,9 +157,9 @@ jira-analysis/
 │   │       ├── change_impact.txt
 │   │       └── general.txt
 │   └── settings.py                   # ✅ 配置管理
-├── ui-next/                          # ✅ Next.js UI (已完成)
+├── ui/                               # ✅ 简单 HTML UI
 ├── tests/                            # ✅ 测试用例
-├── llama_deploy.yml                  # ✅ 部署配置
+├── config.yaml                       # ✅ 配置文件
 └── README.md
 ```
 
@@ -165,11 +174,12 @@ jira-analysis/
 5. **Format Output**: 格式化输出结果
 6. **Save Knowledge**: 保存到知识库
 
-### BatchAnalysisWorkflow（批量分析）⏳
+### BatchAnalysisWorkflow（批量分析）✅
 
 1. **Start**: 接收 issue keys 列表或 JQL 查询
-2. **Batch Analyze**: 并发分析多个 issues（控制并发数）
-3. **Generate Summary**: 生成汇总报告
+2. **Load Batch**: 批量加载 issues
+3. **Analyze Batch**: 并发分析多个 issues（控制并发数）
+4. **Generate Report**: 生成汇总报告
 
 ## 测试
 

@@ -6,7 +6,7 @@
 import logging
 from typing import AsyncIterator, Dict, Any
 
-from llama_index.llms.openai_like import OpenAILike
+from llama_index.llms.openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class LLMClient:
         self.max_tokens = config.get("max_tokens", 4096)
 
         # 创建 LLM 实例
-        self.llm = OpenAILike(
+        self.llm = OpenAI(
             api_base=self.base_url,
             model=self.model,
             temperature=self.temperature,

@@ -22,6 +22,7 @@ export default defineConfig({
   /* Opt out of parallel tests on CI */
   workers: process.env.CI ? 1 : 3,
 
+
   /* Reporter to use */
   reporter: 'html',
 

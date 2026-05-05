@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Analysis - Simple UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 15px 30px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .mode-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-section label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-section input,
+        .input-section textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input-section input:focus,
+        .input-section textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-section textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .examples {
+            margin-top: 10px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .examples h4 {
+            margin-bottom: 10px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .examples ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .examples li {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9em;
+        }
+
+        .examples li:hover {
+            background: #e8eaf6;
+        }
+
+        .analyze-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .analyze-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .analyze-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .results.visible {
+            display: block;
+        }
+
+        .results h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .progress {
+            margin-bottom: 20px;
+        }
+
+        .progress-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .result-content {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .error {
+            padding: 15px;
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            border-radius: 4px;
+            color: #c62828;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Jira Analysis System</h1>
+            <p>Deep insights powered by AI workflows</p>
+        </div>
+
+        <div class="content">
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="deep">Deep Analysis</button>
+                <button class="mode-btn" data-mode="batch">Batch Analysis</button>
+            </div>
+
+            <div id="deep-mode" class="mode-content">
+                <div class="input-section">
+                    <label for="issue-key">Issue Key</label>
+                    <input type="text" id="issue-key" placeholder="e.g., PROJ-123">
+                </div>
+
+                <div class="input-section">
+                    <label for="question">Analysis Question</label>
+                    <textarea id="question" placeholder="What would you like to know about this issue?"></textarea>
+
+                    <div class="examples">
+                        <h4>Example Questions:</h4>
+                        <ul>
+                            <li onclick="setQuestion(this)">What are the root causes of this issue?</li>
+                            <li onclick="setQuestion(this)">What are the technical implications and risks?</li>
+                            <li onclick="setQuestion(this)">What dependencies does this issue have?</li>
+                            <li onclick="setQuestion(this)">Summarize the discussion and decisions made</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <button class="analyze-btn" onclick="analyzeDeep()">
+                    Analyze Issue
+                </button>
+            </div>
+
+            <div id="batch-mode" class="mode-content" style="display: none;">
+                <div class="input-section">
+                    <label for="issue-keys">Issue Keys (comma-separated)</label>
+                    <input type="text" id="issue-keys" placeholder="e.g., PROJ-123, PROJ-124, PROJ-125">
+                </div>
+
+                <div class="input-section">
+                    <label for="batch-question">Analysis Question</label>
+                    <textarea id="batch-question" placeholder="What would you like to know about these issues?"></textarea>
+
+                    <div class="examples">
+                        <h4>Example Questions:</h4>
+                        <ul>
+                            <li onclick="setBatchQuestion(this)">What are the common patterns across these issues?</li>
+                            <li onclick="setBatchQuestion(this)">Which issues are related and how?</li>
+                            <li onclick="setBatchQuestion(this)">What is the overall impact and priority?</li>
+                            <li onclick="setBatchQuestion(this)">Summarize the key themes and blockers</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <button class="analyze-btn" onclick="analyzeBatch()">
+                    Analyze Issues
+                </button>
+            </div>
+
+            <div id="results" class="results">
+                <h3>Analysis Results</h3>
+                <div id="progress" class="progress"></div>
+                <div id="result-content" class="result-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4501';
+
+        // Mode switching
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const mode = btn.dataset.mode;
+                document.getElementById('deep-mode').style.display = mode === 'deep' ? 'block' : 'none';
+                document.getElementById('batch-mode').style.display = mode === 'batch' ? 'block' : 'none';
+                document.getElementById('results').classList.remove('visible');
+            });
+        });
+
+        function setQuestion(element) {
+            document.getElementById('question').value = element.textContent;
+        }
+
+        function setBatchQuestion(element) {
+            document.getElementById('batch-question').value = element.textContent;
+        }
+
+        async function analyzeDeep() {
+            const issueKey = document.getElementById('issue-key').value.trim();
+            const question = document.getElementById('question').value.trim();
+
+            if (!issueKey || !question) {
+                alert('Please enter both issue key and question');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('results');
+            const progressDiv = document.getElementById('progress');
+            const resultContent = document.getElementById('result-content');
+
+            resultsDiv.classList.add('visible');
+            progressDiv.innerHTML = '<div class="progress-item">Starting analysis...<span class="loading"></span></div>';
+            resultContent.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        issue_key: issueKey,
+                        question: question
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') {
+                                progressDiv.innerHTML += '<div class="progress-item">Analysis complete!</div>';
+                                continue;
+                            }
+
+                            try {
+                                const event = JSON.parse(data);
+
+                                if (event.type === 'progress') {
+                                    progressDiv.innerHTML += `<div class="progress-item">${event.message}</div>`;
+                                } else if (event.type === 'result') {
+                                    resultContent.textContent = JSON.stringify(event.data, null, 2);
+                                } else if (event.type === 'error') {
+                                    progressDiv.innerHTML += `<div class="error">Error: ${event.message}</div>`;
+                                }
+                            } catch (e) {
+                                console.error('Failed to parse event:', data, e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                progressDiv.innerHTML += `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function analyzeBatch() {
+            const issueKeysStr = document.getElementById('issue-keys').value.trim();
+            const question = document.getElementById('batch-question').value.trim();
+
+            if (!issueKeysStr || !question) {
+                alert('Please enter both issue keys and question');
+                return;
+            }
+
+            const issueKeys = issueKeysStr.split(',').map(k => k.trim()).filter(k => k);
+
+            const resultsDiv = document.getElementById('results');
+            const progressDiv = document.getElementById('progress');
+            const resultContent = document.getElementById('result-content');
+
+            resultsDiv.classList.add('visible');
+            progressDiv.innerHTML = '<div class="progress-item">Starting batch analysis...<span class="loading"></span></div>';
+            resultContent.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/batch-analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        issue_keys: issueKeys,
+                        question: question
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') {
+                                progressDiv.innerHTML += '<div class="progress-item">Batch analysis complete!</div>';
+                                continue;
+                            }
+
+                            try {
+                                const event = JSON.parse(data);
+
+                                if (event.type === 'progress') {
+                                    progressDiv.innerHTML += `<div class="progress-item">${event.message}</div>`;
+                                } else if (event.type === 'result') {
+                                    resultContent.textContent = JSON.stringify(event.data, null, 2);
+                                } else if (event.type === 'error') {
+                                    progressDiv.innerHTML += `<div class="error">Error: ${event.message}</div>`;
+                                }
+                            } catch (e) {
+                                console.error('Failed to parse event:', data, e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                progressDiv.innerHTML += `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

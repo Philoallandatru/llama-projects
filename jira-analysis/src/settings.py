@@ -14,8 +14,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
     """从 YAML 文件加载配置"""
-    path = Path(config_path)
-    if not path.exists():
+    # Try to find config.yaml in multiple locations
+    search_paths = [
+        Path(config_path),  # Current directory
+        Path(__file__).parent.parent / config_path,  # jira-analysis root
+        Path(__file__).parent.parent.parent / config_path,  # llama-projects root
+    ]
+
+    path = None
+    for p in search_paths:
+        if p.exists():
+            path = p
+            break
+
+    if path is None:
         return {}
 
     with open(path, "r", encoding="utf-8") as f:
@@ -138,3 +150,31 @@ _yaml_config = load_yaml_config()
 
 # 全局配置实例（YAML 配置会覆盖默认值）
 settings = Settings(**_yaml_config)
+
+
+def init_settings():
+    """初始化 LlamaIndex Settings（LLM 和 Embedding）
+
+    这个函数用于在应用启动时配置全局的 LLM 和 Embedding 模型。
+    """
+    from llama_index.core import Settings as LlamaSettings
+    from llama_index.llms.openai import OpenAI
+    from llama_index.embeddings.openai import OpenAIEmbedding
+
+    # 配置 LLM
+    LlamaSettings.llm = OpenAI(
+        model="gpt-3.5-turbo",  # 使用已知模型名称通过验证
+        api_base=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
+        timeout=300
+    )
+
+    # 配置 Embedding
+    LlamaSettings.embed_model = OpenAIEmbedding(
+        model="text-embedding-3-small",
+        api_base=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        timeout=300
+    )

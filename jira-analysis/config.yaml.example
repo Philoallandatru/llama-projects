@@ -1,11 +1,12 @@
-# Jira Analysis 配置文件
+# Jira Analysis 配置文件示例
+# 复制此文件为 config.yaml 并填入真实配置
 
 # Jira 配置
 jira:
-  server: "https://sakiko222.atlassian.net"
-  email: "${JIRA_EMAIL}"  # Set via environment variable
-  token: "${JIRA_API_TOKEN}"  # Set via environment variable
-  project: "KAN"
+  server: "https://your-domain.atlassian.net"
+  email: "your-email@example.com"
+  token: "your-jira-api-token"
+  project: "YOUR_PROJECT_KEY"  # 可选
 
 # LLM 配置
 llm:

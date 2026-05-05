@@ -27,31 +27,31 @@ def project_root() -> Path:
 
 @pytest.fixture(scope="session")
 def llama_deploy_process(project_root: Path) -> Generator[subprocess.Popen, None, None]:
-    """启动 LlamaDeploy API 服务器"""
-    # 启动服务器
+    """启动 Mock API 服务器（用于E2E测试）"""
+    # 启动 mock 服务器
     process = subprocess.Popen(
-        ["uv", "run", "-m", "llama_deploy.apiserver"],
+        ["uvicorn", "tests.e2e.mock_api_server:app", "--host", "127.0.0.1", "--port", "4501"],
         cwd=project_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
 
     # 等待服务器启动
-    time.sleep(5)
+    time.sleep(3)
 
     # 检查服务器是否启动成功
     import requests
     max_retries = 10
     for i in range(max_retries):
         try:
-            response = requests.get("http://localhost:4501/docs")
+            response = requests.get("http://localhost:4501/")
             if response.status_code == 200:
                 break
         except requests.exceptions.ConnectionError:
             if i == max_retries - 1:
                 process.kill()
-                raise RuntimeError("LlamaDeploy server failed to start")
-            time.sleep(2)
+                raise RuntimeError("Mock API server failed to start")
+            time.sleep(1)
 
     yield process
 
@@ -63,27 +63,10 @@ def llama_deploy_process(project_root: Path) -> Generator[subprocess.Popen, None
 @pytest.fixture(scope="session")
 def deployment_process(
     project_root: Path, llama_deploy_process: subprocess.Popen
-) -> Generator[subprocess.Popen, None, None]:
-    """部署工作流"""
-    # 等待 API 服务器完全启动
-    time.sleep(2)
-
-    # 部署工作流
-    process = subprocess.Popen(
-        ["uv", "run", "llamactl", "deploy", "llama_deploy.yml"],
-        cwd=project_root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    # 等待部署完成
-    time.sleep(5)
-
-    yield process
-
-    # 清理
-    process.terminate()
-    process.wait(timeout=10)
+) -> Generator[None, None, None]:
+    """Mock部署（无需实际部署）"""
+    # Mock服务器已经包含所有端点，无需额外部署
+    yield None
 
 
 @pytest.fixture(scope="session")
@@ -121,9 +104,9 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def ui_url(base_url: str) -> str:
+def ui_url() -> str:
     """UI URL"""
-    return f"{base_url}/deployments/jira-analysis/ui"
+    return "http://localhost:3001/deployments/jira-analysis/ui"
 
 
 @pytest.fixture

@@ -32,6 +32,7 @@ class LLMWikiConfig:
     llm_provider: str = "anthropic"
     llm_model: str = "claude-sonnet-4"
     llm_api_key: str = ""
+    llm_base_url: str = ""  # For LM Studio or custom OpenAI-compatible endpoints
 
     # Conversion settings
     include_comments: bool = True
@@ -45,13 +46,27 @@ class LLMWikiConfig:
         Load configuration from YAML file with environment variable substitution.
 
         Args:
-            config_path: Path to config file (default: llmwiki/config.yaml)
+            config_path: Path to config file (default: auto-detect)
 
         Returns:
             LLMWikiConfig instance
         """
         if config_path is None:
-            config_path = Path("llmwiki/config.yaml")
+            # Try multiple locations
+            candidates = [
+                Path("config.yaml"),           # Current directory
+                Path("llmwiki/config.yaml"),   # From project root
+            ]
+
+            for candidate in candidates:
+                if candidate.exists():
+                    config_path = candidate
+                    break
+
+            if config_path is None:
+                raise FileNotFoundError(
+                    f"Config file not found. Tried: {', '.join(str(c) for c in candidates)}"
+                )
 
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -73,6 +88,7 @@ class LLMWikiConfig:
             "llm_provider": data.get("llm", {}).get("provider", "anthropic"),
             "llm_model": data.get("llm", {}).get("model", "claude-sonnet-4"),
             "llm_api_key": cls._resolve_env(data.get("llm", {}).get("api_key", "")),
+            "llm_base_url": data.get("llm", {}).get("base_url", ""),
             "sources_dir": Path(data.get("paths", {}).get("sources", "llmwiki/sources")),
             "wiki_dir": Path(data.get("paths", {}).get("wiki", "llmwiki/wiki")),
         }

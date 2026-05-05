@@ -54,28 +54,28 @@ def sync(ctx, force):
     """Sync data sources and compile wiki."""
     config = ctx.obj["config"]
 
-    click.echo("🔄 Starting sync...")
+    click.echo("Starting sync...")
 
     # Run sync
     orchestrator = WikiSyncOrchestrator(config)
     stats = orchestrator.sync_all(force=force)
 
     # Display results
-    click.echo("\n✅ Sync complete!")
+    click.echo("\nSync complete!")
     click.echo(f"  Jira: {stats['jira_updated']} updated, {stats['jira_unchanged']} unchanged")
     click.echo(f"  Confluence: {stats['confluence_updated']} updated, {stats['confluence_unchanged']} unchanged")
 
     # Run compilation
     if stats['jira_updated'] > 0 or stats['confluence_updated'] > 0:
-        click.echo("\n📚 Compiling wiki...")
+        click.echo("\nCompiling wiki...")
         try:
             _run_llmwiki_compile(config)
-            click.echo("✅ Compilation complete!")
+            click.echo("Compilation complete!")
         except Exception as e:
-            click.echo(f"❌ Compilation failed: {e}", err=True)
+            click.echo(f"Compilation failed: {e}", err=True)
             sys.exit(1)
     else:
-        click.echo("\n⏭️  No changes detected, skipping compilation")
+        click.echo("\nNo changes detected, skipping compilation")
 
 
 @cli.command()
@@ -84,13 +84,13 @@ def compile(ctx):
     """Compile wiki from existing sources/ directory."""
     config = ctx.obj["config"]
 
-    click.echo("📚 Compiling wiki...")
+    click.echo("Compiling wiki...")
 
     try:
         _run_llmwiki_compile(config)
-        click.echo("✅ Compilation complete!")
+        click.echo("Compilation complete!")
     except Exception as e:
-        click.echo(f"❌ Compilation failed: {e}", err=True)
+        click.echo(f"Compilation failed: {e}", err=True)
         sys.exit(1)
 
 
@@ -111,8 +111,8 @@ def query(ctx, question, save, debug, top_k, rerank_keep):
     """
     config = ctx.obj["config"]
 
-    click.echo(f"🔍 Question: {question}\n")
-    click.echo("📄 Selecting relevant pages...")
+    click.echo(f"Question: {question}\n")
+    click.echo("Selecting relevant pages...")
 
     try:
         from llmwiki.retrieval import query_wiki, QueryOptions
@@ -130,10 +130,10 @@ def query(ctx, question, save, debug, top_k, rerank_keep):
         )
 
         # Display results
-        click.echo(f"\n💡 Reasoning: {result.reasoning}")
-        click.echo(f"📚 Selected pages: {', '.join(result.selected_pages)}\n")
+        click.echo(f"\nReasoning: {result.reasoning}")
+        click.echo(f"Selected pages: {', '.join(result.selected_pages)}\n")
 
-        click.echo("✨ Answer:\n")
+        click.echo("Answer:\n")
         click.echo(result.answer)
         click.echo()
 
@@ -143,13 +143,13 @@ def query(ctx, question, save, debug, top_k, rerank_keep):
 
         # Show save confirmation
         if result.saved_slug:
-            click.echo(f"✅ Saved as: {result.saved_slug}.md")
+            click.echo(f"Saved as: {result.saved_slug}.md")
             click.echo("   Future queries will use this answer as context.")
         elif not save:
-            click.echo("💡 Tip: use --save to add this answer to your wiki")
+            click.echo("Tip: use --save to add this answer to your wiki")
 
     except Exception as e:
-        click.echo(f"❌ Query failed: {e}", err=True)
+        click.echo(f"Query failed: {e}", err=True)
         if debug:
             import traceback
             traceback.print_exc()
@@ -162,7 +162,7 @@ def status(ctx):
     """Show wiki status and statistics."""
     config = ctx.obj["config"]
 
-    click.echo("📊 Wiki Status\n")
+    click.echo("Wiki Status\n")
 
     # Count source files
     sources_dir = config.sources_dir
@@ -195,7 +195,7 @@ def status(ctx):
 @click.pass_context
 def init(ctx):
     """Initialize LLM Wiki directory structure and config."""
-    click.echo("🚀 Initializing LLM Wiki...\n")
+    click.echo("Initializing LLM Wiki...\n")
 
     # Create directories
     dirs = [
@@ -206,21 +206,127 @@ def init(ctx):
 
     for dir_path in dirs:
         dir_path.mkdir(parents=True, exist_ok=True)
-        click.echo(f"✓ Created {dir_path}/")
+        click.echo(f"Created {dir_path}/")
 
     # Create config template
     config_path = Path("llmwiki/config.yaml")
     if config_path.exists():
-        click.echo(f"\n⚠️  Config file already exists: {config_path}")
+        click.echo(f"\nConfig file already exists: {config_path}")
     else:
         config_path.write_text(_get_config_template())
-        click.echo(f"\n✓ Created {config_path}")
+        click.echo(f"\nCreated {config_path}")
 
-    click.echo("\n✅ Initialization complete!")
+    click.echo("\nInitialization complete!")
     click.echo("\nNext steps:")
     click.echo("  1. Edit llmwiki/config.yaml with your credentials")
     click.echo("  2. Set environment variables (JIRA_API_TOKEN, etc.)")
     click.echo("  3. Run: llmwiki sync")
+
+
+@cli.command()
+@click.option(
+    "--format",
+    type=click.Choice(["llms-txt", "llms-full-txt", "json", "json-ld", "graphml", "marp"]),
+    default="llms-txt",
+    help="Export format",
+)
+@click.option("--output", "-o", help="Output file path (default: dist/exports/)")
+@click.pass_context
+def export(ctx, format: str, output: str | None):
+    """Export wiki to various formats (llms-txt, JSON, GraphML, etc)."""
+    config = ctx.obj["config"]
+
+    click.echo(f"Exporting wiki to {format} format...")
+
+    try:
+        _run_llmwiki_export(config, format, output)
+        click.echo("Export complete!")
+
+        # Show output location
+        if not output:
+            export_dir = config.sources_dir.parent / "dist" / "exports"
+            if format == "llms-txt":
+                output_file = export_dir / "llms.txt"
+            elif format == "llms-full-txt":
+                output_file = export_dir / "llms-full.txt"
+            else:
+                output_file = export_dir / f"export.{format}"
+
+            if output_file.exists():
+                size = output_file.stat().st_size
+                click.echo(f"\n✓ Exported to: {output_file}")
+                click.echo(f"  Size: {size:,} bytes")
+
+    except Exception as e:
+        click.echo(f"Export failed: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def lint(ctx):
+    """Check wiki quality (broken links, structure issues)."""
+    config = ctx.obj["config"]
+
+    click.echo("Checking wiki quality...")
+
+    try:
+        _run_llmwiki_lint(config)
+    except Exception as e:
+        click.echo(f"Lint failed: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--interval", type=int, default=300, help="Sync interval in seconds (default: 300)")
+@click.pass_context
+def watch(ctx, interval: int):
+    """Watch for changes and auto-sync + compile."""
+    import time
+    from datetime import datetime
+
+    config = ctx.obj["config"]
+
+    click.echo(f"Starting watch mode (sync interval: {interval}s)")
+    click.echo("Press Ctrl+C to stop\n")
+
+    try:
+        while True:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            click.echo(f"[{timestamp}] Syncing...")
+
+            try:
+                # Sync data sources
+                from llmwiki.sync import WikiSyncOrchestrator
+
+                orchestrator = WikiSyncOrchestrator(config)
+                stats = orchestrator.sync_all(force=False)
+
+                jira_updated = stats.get("jira_updated", 0)
+                confluence_updated = stats.get("confluence_updated", 0)
+
+                if jira_updated > 0 or confluence_updated > 0:
+                    click.echo(f"  Jira: {jira_updated} updated, Confluence: {confluence_updated} updated")
+
+                    # Trigger compile
+                    click.echo("  Compiling...")
+                    _run_llmwiki_compile(config)
+                    click.echo("  Compile completed")
+                else:
+                    click.echo("  No changes detected")
+
+            except Exception as e:
+                click.echo(f"  ✗ Error: {e}", err=True)
+                if ctx.obj.get("debug"):
+                    import traceback
+                    traceback.print_exc()
+
+            click.echo(f"  Next sync in {interval}s...\n")
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        click.echo("\n\nWatch mode stopped")
+
 
 
 def _run_llmwiki_compile(config: LLMWikiConfig):
@@ -229,7 +335,6 @@ def _run_llmwiki_compile(config: LLMWikiConfig):
         "npx",
         "llm-wiki-compiler",
         "compile",
-        "--root", str(config.sources_dir.parent),
     ]
 
     # Set environment variables for llm-wiki-compiler
@@ -242,15 +347,83 @@ def _run_llmwiki_compile(config: LLMWikiConfig):
         env["ANTHROPIC_API_KEY"] = config.llm_api_key
     elif config.llm_provider == "openai":
         env["OPENAI_API_KEY"] = config.llm_api_key
+        if config.llm_base_url:
+            env["OPENAI_BASE_URL"] = config.llm_base_url
 
-    result = subprocess.run(cmd, env={**subprocess.os.environ, **env}, capture_output=True, text=True)
+    # Run from the parent directory of sources/
+    cwd = str(config.sources_dir.parent)
+
+    # Don't capture output - let it stream directly to terminal to avoid encoding issues
+    result = subprocess.run(
+        cmd,
+        env={**subprocess.os.environ, **env},
+        shell=True,
+        cwd=cwd,
+    )
 
     if result.returncode != 0:
-        raise RuntimeError(f"llm-wiki-compiler failed: {result.stderr}")
+        raise RuntimeError(f"llm-wiki-compiler failed with exit code {result.returncode}")
+
+
+def _run_llmwiki_export(config: LLMWikiConfig, format: str, output: str | None):
+    """Run llm-wiki-compiler export command."""
+    import os
+
+    cmd = [
+        "npx",
+        "llm-wiki-compiler",
+        "export",
+        "--target", format,
+    ]
+
+    if output:
+        cmd.extend(["--output", output])
+
+    # Use the parent directory of sources as working directory
+    cwd = str(config.sources_dir.parent)
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',  # Fix Windows encoding issues
+        shell=True,  # Required on Windows for npx
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Export failed: {result.stderr}")
 
     # Print output
     if result.stdout:
         click.echo(result.stdout)
+
+
+def _run_llmwiki_lint(config: LLMWikiConfig):
+    """Run llm-wiki-compiler lint command."""
+    cmd = [
+        "npx",
+        "llm-wiki-compiler",
+        "lint",
+    ]
+
+    cwd = str(config.sources_dir.parent)
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',  # Fix Windows encoding issues
+        shell=True,  # Required on Windows for npx
+    )
+
+    # Print output (lint may return non-zero if issues found)
+    if result.stdout:
+        click.echo(result.stdout)
+    if result.stderr:
+        click.echo(result.stderr, err=True)
+
 
 
 def _get_config_template() -> str:

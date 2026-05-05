@@ -128,9 +128,9 @@ class DeepAnalysisWorkflow(Workflow):
         mode = ev.get("mode", "balanced")
         retrieve_evidence = ev.get("retrieve_evidence", True)
 
-        ctx.data["issue_key"] = issue_key
-        ctx.data["mode"] = mode
-        ctx.data["retrieve_evidence"] = retrieve_evidence
+        await ctx.set("issue_key", issue_key)
+        await ctx.set("mode", mode)
+        await ctx.set("retrieve_evidence", retrieve_evidence)
 
         logger.info(f"Starting analysis for {issue_key} in {mode} mode")
 
@@ -154,7 +154,7 @@ class DeepAnalysisWorkflow(Workflow):
         )
 
         issue_data = await loader.load_issue_realtime(ev.issue_key)
-        ctx.data["issue_data"] = issue_data
+        await ctx.set("issue_data", issue_data)
 
         issue_type = issue_data.get("fields", {}).get("issuetype", {}).get("name", "Unknown")
 
@@ -180,7 +180,7 @@ class DeepAnalysisWorkflow(Workflow):
         """
         router = Router(self.profiles_dir / "config.json")
         profile = router.route(ev.issue_type)
-        ctx.data["profile"] = profile
+        await ctx.set("profile", profile)
 
         ctx.write_event_to_stream(
             ProgressEvent(
@@ -202,12 +202,13 @@ class DeepAnalysisWorkflow(Workflow):
         Returns:
             AnalyzeEvent
         """
-        if not ctx.data.get("retrieve_evidence", True):
-            ctx.data["evidence"] = {
+        retrieve_evidence = await ctx.get("retrieve_evidence", default=True)
+        if not retrieve_evidence:
+            await ctx.set("evidence", {
                 "similar_issues": [],
                 "confluence": [],
                 "specs": []
-            }
+            })
             ctx.write_event_to_stream(
                 ProgressEvent(
                     stage="retrieve",
@@ -216,8 +217,8 @@ class DeepAnalysisWorkflow(Workflow):
             )
             return AnalyzeEvent()
 
-        issue_data = ctx.data["issue_data"]
-        issue_key = ctx.data["issue_key"]
+        issue_data = await ctx.get("issue_data")
+        issue_key = await ctx.get("issue_key")
 
         # 构建查询文本
         query = build_retrieval_query(issue_data)
@@ -232,7 +233,7 @@ class DeepAnalysisWorkflow(Workflow):
             exclude_issue_key=issue_key
         )
 
-        ctx.data["evidence"] = evidence
+        await ctx.set("evidence", evidence)
 
         total_count = sum(len(docs) for docs in evidence.values())
         ctx.write_event_to_stream(
@@ -258,10 +259,10 @@ class DeepAnalysisWorkflow(Workflow):
         Returns:
             FormatEvent
         """
-        profile: ProfileConfig = ctx.data["profile"]
-        mode = ctx.data["mode"]
-        issue_data = ctx.data["issue_data"]
-        evidence = ctx.data["evidence"]
+        profile: ProfileConfig = await ctx.get("profile")
+        mode = await ctx.get("mode")
+        issue_data = await ctx.get("issue_data")
+        evidence = await ctx.get("evidence")
 
         # 构建 prompt
         prompt_builder = PromptBuilder(self.profiles_dir)
@@ -287,7 +288,7 @@ class DeepAnalysisWorkflow(Workflow):
             analysis_text += chunk
             ctx.write_event_to_stream(StreamEvent(content=chunk))
 
-        ctx.data["analysis"] = analysis_text
+        await ctx.set("analysis", analysis_text)
 
         ctx.write_event_to_stream(
             ProgressEvent(
@@ -309,11 +310,11 @@ class DeepAnalysisWorkflow(Workflow):
         Returns:
             StopEvent
         """
-        analysis = ctx.data["analysis"]
-        issue_key = ctx.data["issue_key"]
-        profile: ProfileConfig = ctx.data["profile"]
-        mode = ctx.data["mode"]
-        evidence = ctx.data["evidence"]
+        analysis = await ctx.get("analysis")
+        issue_key = await ctx.get("issue_key")
+        profile: ProfileConfig = await ctx.get("profile")
+        mode = await ctx.get("mode")
+        evidence = await ctx.get("evidence")
 
         result = {
             "issue_key": issue_key,

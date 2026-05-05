@@ -89,7 +89,7 @@ strict_optional = false
 disable_error_code = ["return-value", "assignment"]
 
 [[tool.mypy.overrides]]
-module = ["datasource.*", "chat.*", "data_explore.*", "deep_serach.*"]
+module = ["datasource.*", "chat.*", "data_explore.*", "deep_serach.*", "jira_analysis.*"]
 ignore_missing_imports = false
 
 [build-system]
@@ -109,4 +109,4 @@ dev = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["datasource", "chat", "data-explore", "deep-serach"]
+packages = ["datasource", "chat", "data-explore", "deep-serach", "jira-analysis"]

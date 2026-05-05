@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Header Component', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     // Wait for page to load
     await page.waitForLoadState('networkidle');
   });
@@ -42,9 +42,9 @@ test.describe('Header Component', () => {
     const body = page.locator('body');
     await expect(body).toBeVisible();
 
-    // Check for main content area
-    const mainContent = page.locator('main, [role="main"], .main-content').first();
+    // Check for main content area - should have at least one
+    const mainContent = page.locator('main, [role="main"], div[class*="main"]');
     const hasMainContent = await mainContent.count();
-    expect(hasMainContent).toBeGreaterThanOrEqual(0);
+    expect(hasMainContent).toBeGreaterThan(0);
   });
 });

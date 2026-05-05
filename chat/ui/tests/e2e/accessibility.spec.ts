@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Accessibility', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
@@ -93,6 +93,7 @@ test.describe('Accessibility', () => {
     const buttons = page.locator('button');
     const buttonCount = await buttons.count();
 
+    const inaccessibleButtons = [];
     for (let i = 0; i < buttonCount; i++) {
       const button = buttons.nth(i);
       const text = await button.textContent();
@@ -102,8 +103,11 @@ test.describe('Accessibility', () => {
       // Button should have either text content or aria-label
       const hasAccessibleName = (text && text.trim().length > 0) || ariaLabel || ariaLabelledBy;
       if (!hasAccessibleName) {
-        console.warn('Button without accessible name found');
+        inaccessibleButtons.push(i);
       }
     }
+
+    // Fail the test if any buttons lack accessible names
+    expect(inaccessibleButtons, `Buttons at indices ${inaccessibleButtons.join(', ')} lack accessible names`).toHaveLength(0);
   });
 });

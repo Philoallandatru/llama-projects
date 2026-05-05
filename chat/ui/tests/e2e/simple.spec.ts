@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 test('simple navigation test', async ({ page }) => {
-  // Use full URL instead of relative path
-  await page.goto('http://localhost:3000');
+  // Use relative path to leverage baseURL
+  await page.goto('/');
   await page.waitForLoadState('networkidle');
 
   // Check that page loaded

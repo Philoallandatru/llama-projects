@@ -22,6 +22,28 @@ class JiraConverter(BaseConverter):
         self.include_comments = include_comments
         self.max_comments = max_comments
 
+        # ADF node type dispatch table
+        self._adf_converters = {
+            "paragraph": self._convert_paragraph,
+            "heading": self._convert_heading,
+            "bulletList": self._convert_bullet_list,
+            "orderedList": self._convert_ordered_list,
+            "listItem": self._convert_list_item,
+            "codeBlock": self._convert_code_block,
+            "blockquote": self._convert_blockquote,
+            "panel": self._convert_panel,
+            "table": self._convert_table,
+            "text": self._convert_text,
+        }
+
+        # Mark type dispatch table for text formatting
+        self._mark_formatters = {
+            "strong": lambda text: f"**{text}**",
+            "em": lambda text: f"*{text}*",
+            "code": lambda text: f"`{text}`",
+            "strike": lambda text: f"~~{text}~~",
+        }
+
     def convert(self, issue: dict[str, Any]) -> str:
         """
         Convert Jira issue JSON to narrative Markdown.
@@ -251,26 +273,9 @@ class JiraConverter(BaseConverter):
         """Convert a single ADF node to Markdown."""
         node_type = node.get("type", "")
 
-        if node_type == "paragraph":
-            return self._convert_paragraph(node)
-        elif node_type == "heading":
-            return self._convert_heading(node)
-        elif node_type == "bulletList":
-            return self._convert_bullet_list(node)
-        elif node_type == "orderedList":
-            return self._convert_ordered_list(node)
-        elif node_type == "listItem":
-            return self._convert_list_item(node)
-        elif node_type == "codeBlock":
-            return self._convert_code_block(node)
-        elif node_type == "blockquote":
-            return self._convert_blockquote(node)
-        elif node_type == "panel":
-            return self._convert_panel(node)
-        elif node_type == "table":
-            return self._convert_table(node)
-        elif node_type == "text":
-            return self._convert_text(node)
+        # Use dispatch table for known node types
+        if converter := self._adf_converters.get(node_type):
+            return converter(node)
 
         # Fallback: try to process content
         if "content" in node:
@@ -337,16 +342,15 @@ class JiraConverter(BaseConverter):
 
         for mark in marks:
             mark_type = mark.get("type", "")
-            if mark_type == "strong":
-                text = f"**{text}**"
-            elif mark_type == "em":
-                text = f"*{text}*"
-            elif mark_type == "code":
-                text = f"`{text}`"
-            elif mark_type == "link":
+
+            # Handle link separately (needs href attribute)
+            if mark_type == "link":
                 href = mark.get("attrs", {}).get("href", "")
                 text = f"[{text}]({href})"
-            elif mark_type == "strike":
-                text = f"~~{text}~~"
+                continue
+
+            # Use dispatch table for other marks
+            if formatter := self._mark_formatters.get(mark_type):
+                text = formatter(text)
 
         return text

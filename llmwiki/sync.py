@@ -1,7 +1,10 @@
 """Incremental sync orchestrator for LLM Wiki layer."""
 
+import asyncio
 import hashlib
+import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,6 +21,13 @@ from datasource.core.sources.jira import JiraDataSource
 from datasource.core.sources.confluence import ConfluenceDataSource
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SyncStats:
+    """Statistics for a sync operation."""
+    updated: int = 0
+    unchanged: int = 0
 
 
 class WikiSyncOrchestrator:
@@ -78,13 +88,6 @@ class WikiSyncOrchestrator:
         """
         logger.info("Starting incremental sync...")
 
-        stats = {
-            "jira_updated": 0,
-            "jira_unchanged": 0,
-            "confluence_updated": 0,
-            "confluence_unchanged": 0,
-        }
-
         # Determine sync timestamp
         if force or not self.config.last_sync_timestamp:
             since = None
@@ -93,15 +96,8 @@ class WikiSyncOrchestrator:
             since = self.config.last_sync_timestamp
             logger.info(f"Performing incremental sync since {since}")
 
-        # Sync Jira issues
-        jira_stats = self._sync_jira(since)
-        stats["jira_updated"] = jira_stats["updated"]
-        stats["jira_unchanged"] = jira_stats["unchanged"]
-
-        # Sync Confluence pages
-        confluence_stats = self._sync_confluence(since)
-        stats["confluence_updated"] = confluence_stats["updated"]
-        stats["confluence_unchanged"] = confluence_stats["unchanged"]
+        # Sync Jira and Confluence concurrently
+        jira_stats, confluence_stats = asyncio.run(self._sync_concurrent(since))
 
         # Update last sync timestamp
         self.config.last_sync_timestamp = datetime.now(timezone.utc)
@@ -110,10 +106,31 @@ class WikiSyncOrchestrator:
         # Save hash tracking
         self._save_hashes()
 
+        stats = {
+            "jira_updated": jira_stats.updated,
+            "jira_unchanged": jira_stats.unchanged,
+            "confluence_updated": confluence_stats.updated,
+            "confluence_unchanged": confluence_stats.unchanged,
+        }
+
         logger.info(f"Sync complete: {stats}")
         return stats
 
-    def _sync_jira(self, since: Optional[datetime]) -> dict[str, int]:
+    async def _sync_concurrent(self, since: Optional[datetime]) -> tuple[SyncStats, SyncStats]:
+        """
+        Sync Jira and Confluence concurrently.
+
+        Args:
+            since: Only fetch items updated after this timestamp
+
+        Returns:
+            Tuple of (jira_stats, confluence_stats)
+        """
+        jira_task = asyncio.to_thread(self._sync_jira, since)
+        confluence_task = asyncio.to_thread(self._sync_confluence, since)
+        return await asyncio.gather(jira_task, confluence_task)
+
+    def _sync_jira(self, since: Optional[datetime]) -> SyncStats:
         """
         Sync Jira issues incrementally.
 
@@ -121,9 +138,9 @@ class WikiSyncOrchestrator:
             since: Only fetch issues updated after this timestamp
 
         Returns:
-            Statistics dictionary
+            Statistics dataclass
         """
-        stats = {"updated": 0, "unchanged": 0}
+        stats = SyncStats()
 
         # Build JQL query for incremental sync
         if since:
@@ -141,26 +158,24 @@ class WikiSyncOrchestrator:
             key = issue.get("key", "unknown")
             file_path = self.sources_dir / f"jira-{key}.md"
 
-            # Convert to Markdown
-            markdown = self.jira_converter.convert(issue)
-
-            # Check if content changed using SHA-256 hash
-            content_hash = self._compute_hash(markdown)
+            # Compute hash of raw API response BEFORE conversion
+            raw_hash = self._compute_hash(json.dumps(issue, sort_keys=True))
             previous_hash = self.hashes.get(str(file_path))
 
-            if content_hash != previous_hash:
-                # Content changed, write file
+            if raw_hash != previous_hash:
+                # Content changed, convert and write
+                markdown = self.jira_converter.convert(issue)
                 file_path.write_text(markdown, encoding="utf-8")
-                self.hashes[str(file_path)] = content_hash
-                stats["updated"] += 1
+                self.hashes[str(file_path)] = raw_hash
+                stats.updated += 1
                 logger.debug(f"Updated {file_path}")
             else:
-                stats["unchanged"] += 1
+                stats.unchanged += 1
                 logger.debug(f"Unchanged {file_path}")
 
         return stats
 
-    def _sync_confluence(self, since: Optional[datetime]) -> dict[str, int]:
+    def _sync_confluence(self, since: Optional[datetime]) -> SyncStats:
         """
         Sync Confluence pages incrementally.
 
@@ -168,9 +183,9 @@ class WikiSyncOrchestrator:
             since: Only fetch pages updated after this timestamp
 
         Returns:
-            Statistics dictionary
+            Statistics dataclass
         """
-        stats = {"updated": 0, "unchanged": 0}
+        stats = SyncStats()
 
         # Fetch pages (reuse DataSource client)
         if since:
@@ -184,21 +199,19 @@ class WikiSyncOrchestrator:
             page_id = page.get("id", "unknown")
             file_path = self.sources_dir / f"confluence-{page_id}.md"
 
-            # Convert to Markdown
-            markdown = self.confluence_converter.convert(page)
-
-            # Check if content changed using SHA-256 hash
-            content_hash = self._compute_hash(markdown)
+            # Compute hash of raw API response BEFORE conversion
+            raw_hash = self._compute_hash(json.dumps(page, sort_keys=True))
             previous_hash = self.hashes.get(str(file_path))
 
-            if content_hash != previous_hash:
-                # Content changed, write file
+            if raw_hash != previous_hash:
+                # Content changed, convert and write
+                markdown = self.confluence_converter.convert(page)
                 file_path.write_text(markdown, encoding="utf-8")
-                self.hashes[str(file_path)] = content_hash
-                stats["updated"] += 1
+                self.hashes[str(file_path)] = raw_hash
+                stats.updated += 1
                 logger.debug(f"Updated {file_path}")
             else:
-                stats["unchanged"] += 1
+                stats.unchanged += 1
                 logger.debug(f"Unchanged {file_path}")
 
         return stats
@@ -220,12 +233,10 @@ class WikiSyncOrchestrator:
         if not self.hash_file.exists():
             return {}
 
-        import json
         with open(self.hash_file) as f:
             return json.load(f)
 
     def _save_hashes(self):
         """Save content hashes to tracking file."""
-        import json
         with open(self.hash_file, "w") as f:
             json.dump(self.hashes, f, indent=2)

@@ -4,10 +4,18 @@ import json
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from llmwiki.config import LLMWikiConfig
+
+
+class LLMProvider(str, Enum):
+    """Supported LLM providers."""
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
 
 
 @dataclass
@@ -39,6 +47,15 @@ class QueryResult:
     debug: Optional[RetrievalDebug] = None
 
 
+@dataclass
+class QueryOptions:
+    """Options for wiki query."""
+    save: bool = False
+    debug: bool = False
+    top_k: int = 20
+    rerank_keep: int = 5
+
+
 class WikiRetrieval:
     """Python interface to llm-wiki-compiler's retrieval engine."""
 
@@ -55,10 +72,7 @@ class WikiRetrieval:
     def query(
         self,
         question: str,
-        save: bool = False,
-        debug: bool = False,
-        top_k: int = 20,
-        rerank_keep: int = 5,
+        options: Optional[QueryOptions] = None,
     ) -> QueryResult:
         """
         Query the wiki using llm-wiki-compiler's retrieval engine.
@@ -69,16 +83,16 @@ class WikiRetrieval:
 
         Args:
             question: Natural language question
-            save: Save answer as wiki page
-            debug: Include retrieval debug information
-            top_k: Number of chunks to retrieve initially
-            rerank_keep: Number of chunks to keep after BM25 reranking
+            options: Query options (defaults to QueryOptions())
 
         Returns:
             QueryResult with answer, selected pages, and optional debug info
         """
+        if options is None:
+            options = QueryOptions()
+
         # Create a Node.js script that calls the programmatic API
-        script = self._build_query_script(question, save, debug, top_k, rerank_keep)
+        script = self._build_query_script(question, options)
 
         # Write script to temp file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".mjs", delete=False) as f:
@@ -114,10 +128,7 @@ class WikiRetrieval:
     def _build_query_script(
         self,
         question: str,
-        save: bool,
-        debug: bool,
-        top_k: int,
-        rerank_keep: int,
+        options: QueryOptions,
     ) -> str:
         """Build Node.js script that calls llm-wiki-compiler programmatically."""
         # Escape question for JSON
@@ -133,11 +144,11 @@ const originalRerank = CHUNK_RERANK_KEEP;
 
 // Monkey-patch constants (not ideal but llm-wiki-compiler doesn't expose config)
 Object.defineProperty(await import('llm-wiki-compiler/dist/utils/constants.js'), 'CHUNK_TOP_K', {{
-  value: {top_k},
+  value: {options.top_k},
   writable: false
 }});
 Object.defineProperty(await import('llm-wiki-compiler/dist/utils/constants.js'), 'CHUNK_RERANK_KEEP', {{
-  value: {rerank_keep},
+  value: {options.rerank_keep},
   writable: false
 }});
 
@@ -146,8 +157,8 @@ const question = {question_json};
 
 try {{
   const result = await generateAnswer(root, question, {{
-    save: {str(save).lower()},
-    debug: {str(debug).lower()},
+    save: {str(options.save).lower()},
+    debug: {str(options.debug).lower()},
     onToken: (text) => {{
       // Stream tokens to stderr so they don't interfere with JSON output
       process.stderr.write(text);
@@ -179,10 +190,11 @@ try {{
 
         env = os.environ.copy()
 
-        # Set LLM provider config
-        if self.config.llm_provider == "anthropic":
+        # Set LLM provider config using enum
+        provider = LLMProvider(self.config.llm_provider)
+        if provider == LLMProvider.ANTHROPIC:
             env["ANTHROPIC_API_KEY"] = self.config.llm_api_key
-        elif self.config.llm_provider == "openai":
+        elif provider == LLMProvider.OPENAI:
             env["OPENAI_API_KEY"] = self.config.llm_api_key
 
         return env
@@ -221,10 +233,7 @@ try {{
 def query_wiki(
     config: LLMWikiConfig,
     question: str,
-    save: bool = False,
-    debug: bool = False,
-    top_k: int = 20,
-    rerank_keep: int = 5,
+    options: Optional[QueryOptions] = None,
 ) -> QueryResult:
     """
     Convenience function to query the wiki.
@@ -232,13 +241,10 @@ def query_wiki(
     Args:
         config: Wiki configuration
         question: Natural language question
-        save: Save answer as wiki page
-        debug: Include retrieval debug information
-        top_k: Number of chunks to retrieve initially
-        rerank_keep: Number of chunks to keep after BM25 reranking
+        options: Query options (defaults to QueryOptions())
 
     Returns:
         QueryResult with answer and metadata
     """
     retrieval = WikiRetrieval(config)
-    return retrieval.query(question, save=save, debug=debug, top_k=top_k, rerank_keep=rerank_keep)
+    return retrieval.query(question, options=options)

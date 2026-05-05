@@ -115,16 +115,18 @@ def query(ctx, question, save, debug, top_k, rerank_keep):
     click.echo("📄 Selecting relevant pages...")
 
     try:
-        from llmwiki.retrieval import query_wiki
+        from llmwiki.retrieval import query_wiki, QueryOptions
 
         # Query with streaming output
         result = query_wiki(
             config=config,
             question=question,
-            save=save,
-            debug=debug,
-            top_k=top_k,
-            rerank_keep=rerank_keep,
+            options=QueryOptions(
+                save=save,
+                debug=debug,
+                top_k=top_k,
+                rerank_keep=rerank_keep,
+            ),
         )
 
         # Display results

@@ -13,13 +13,16 @@ knowledge graph using llm-wiki-compiler. It provides:
 __version__ = "0.1.0"
 
 from llmwiki.config import LLMWikiConfig
-from llmwiki.sync import WikiSyncOrchestrator
-from llmwiki.retrieval import WikiRetrieval, QueryResult, query_wiki
+from llmwiki.sync import WikiSyncOrchestrator, SyncStats
+from llmwiki.retrieval import WikiRetrieval, QueryResult, QueryOptions, LLMProvider, query_wiki
 
 __all__ = [
     "LLMWikiConfig",
     "WikiSyncOrchestrator",
+    "SyncStats",
     "WikiRetrieval",
     "QueryResult",
+    "QueryOptions",
+    "LLMProvider",
     "query_wiki",
 ]

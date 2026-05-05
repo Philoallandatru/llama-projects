@@ -1,8 +1,14 @@
 """Confluence page to Markdown converter."""
 
+import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from llmwiki.converters.base import BaseConverter
+
+# Import HTMLCleaner from datasource
+sys.path.append(str(Path(__file__).parent.parent.parent / "datasource"))
+from datasource.core.utils.html_cleaner import HTMLCleaner
 
 
 class ConfluenceConverter(BaseConverter):
@@ -20,6 +26,7 @@ class ConfluenceConverter(BaseConverter):
         self.confluence_url = confluence_url.rstrip("/")
         self.include_comments = include_comments
         self.max_comments = max_comments
+        self.html_cleaner = HTMLCleaner()
 
     def convert(self, page: dict[str, Any]) -> str:
         """
@@ -201,97 +208,12 @@ class ConfluenceConverter(BaseConverter):
         Returns:
             Markdown string
         """
-        # This is a simplified conversion - full XHTML parsing would require BeautifulSoup
-        # For now, we'll do basic tag replacements
-
-        import re
-
-        # Remove XML declaration
-        content = re.sub(r'<\?xml[^>]*\?>', '', content)
-
-        # Convert headings
-        for level in range(1, 7):
-            content = re.sub(
-                rf'<h{level}[^>]*>(.*?)</h{level}>',
-                rf'{"#" * level} \1\n',
-                content,
-                flags=re.DOTALL
-            )
-
-        # Convert paragraphs
-        content = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', content, flags=re.DOTALL)
-
-        # Convert bold
-        content = re.sub(r'<strong[^>]*>(.*?)</strong>', r'**\1**', content, flags=re.DOTALL)
-        content = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', content, flags=re.DOTALL)
-
-        # Convert italic
-        content = re.sub(r'<em[^>]*>(.*?)</em>', r'*\1*', content, flags=re.DOTALL)
-        content = re.sub(r'<i[^>]*>(.*?)</i>', r'*\1*', content, flags=re.DOTALL)
-
-        # Convert code
-        content = re.sub(r'<code[^>]*>(.*?)</code>', r'`\1`', content, flags=re.DOTALL)
-
-        # Convert code blocks
-        content = re.sub(
-            r'<ac:structured-macro[^>]*ac:name="code"[^>]*>.*?<ac:plain-text-body><!\[CDATA\[(.*?)\]\]></ac:plain-text-body>.*?</ac:structured-macro>',
-            r'```\n\1\n```\n',
-            content,
-            flags=re.DOTALL
-        )
-
-        # Convert links
-        content = re.sub(
-            r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
-            r'[\2](\1)',
-            content,
-            flags=re.DOTALL
-        )
-
-        # Convert unordered lists
-        content = re.sub(r'<ul[^>]*>', '', content)
-        content = re.sub(r'</ul>', '\n', content)
-        content = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1', content, flags=re.DOTALL)
-
-        # Convert ordered lists
-        content = re.sub(r'<ol[^>]*>', '', content)
-        content = re.sub(r'</ol>', '\n', content)
-
-        # Convert blockquotes
-        content = re.sub(
-            r'<blockquote[^>]*>(.*?)</blockquote>',
-            lambda m: '\n'.join(f'> {line}' for line in m.group(1).strip().split('\n')),
-            content,
-            flags=re.DOTALL
-        )
-
-        # Convert info/warning/note panels
-        content = re.sub(
-            r'<ac:structured-macro[^>]*ac:name="(info|warning|note|tip)"[^>]*>.*?<ac:rich-text-body>(.*?)</ac:rich-text-body>.*?</ac:structured-macro>',
-            r'**\1:**\n\2\n',
-            content,
-            flags=re.DOTALL | re.IGNORECASE
-        )
-
-        # Convert page links
-        content = re.sub(
-            r'<ac:link[^>]*>.*?<ri:page[^>]*ri:content-title="([^"]*)"[^>]*/>.*?</ac:link>',
-            r'[[\1]]',
-            content,
-            flags=re.DOTALL
-        )
-
-        # Remove remaining HTML tags
-        content = re.sub(r'<[^>]+>', '', content)
-
-        # Clean up excessive whitespace
-        content = re.sub(r'\n{3,}', '\n\n', content)
-
-        return content.strip()
+        # Use existing HTMLCleaner utility from datasource
+        return self.html_cleaner.clean(content)
 
     def _convert_html_to_markdown(self, html: str) -> str:
         """
-        Convert HTML to Markdown (simplified version).
+        Convert HTML to Markdown.
 
         Args:
             html: HTML content
@@ -299,5 +221,4 @@ class ConfluenceConverter(BaseConverter):
         Returns:
             Markdown string
         """
-        # Reuse storage format converter for basic HTML
-        return self._convert_storage_format(html)
+        return self.html_cleaner.clean(html)

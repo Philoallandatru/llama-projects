@@ -1,0 +1,19 @@
+diff --git a/node_modules/@llamaindex/chat-ui/dist/chat/index.js b/node_modules/@llamaindex/chat-ui/dist/chat/index.js
+index 53c2547..40e2037 100644
+--- a/node_modules/@llamaindex/chat-ui/dist/chat/index.js
++++ b/node_modules/@llamaindex/chat-ui/dist/chat/index.js
+@@ -334,12 +334,13 @@ function ChatInputSubmit(props) {
+             })
+         });
+     }
+-    var _props_disabled, _props_children;
++    var _props_disabled, _props_children, _props_aria_label;
+     return /*#__PURE__*/ jsx(Button, {
+         type: "submit",
+         size: "icon",
+         disabled: (_props_disabled = props.disabled) != null ? _props_disabled : isDisabled,
+         className: cn('absolute bottom-2 right-2 rounded-full', props.className),
++        "aria-label": (_props_aria_label = props["aria-label"]) != null ? _props_aria_label : "Send message",
+         children: (_props_children = props.children) != null ? _props_children : /*#__PURE__*/ jsx(Send, {
+             className: "size-4"
+         })

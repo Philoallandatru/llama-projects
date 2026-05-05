@@ -7,6 +7,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
 
+  /* Global setup to wait for server before running tests */
+  globalSetup: './tests/global-setup.ts',
+
   /* Run tests in files in parallel */
   fullyParallel: true,
 
@@ -17,7 +20,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
 
   /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 3,
+
 
   /* Reporter to use */
   reporter: 'html',
@@ -28,7 +32,7 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'http://localhost:3000/deployments/chat/ui',
+    baseURL: 'http://localhost:9876/deployments/chat/ui',
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',

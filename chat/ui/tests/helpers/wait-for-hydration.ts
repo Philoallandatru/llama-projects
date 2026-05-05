@@ -23,8 +23,26 @@ export async function waitForHydration(page: Page) {
 /**
  * Navigate to the chat UI and wait for hydration.
  * Uses the full URL to avoid baseURL configuration issues.
+ * Retries on connection refused to handle server startup delays.
  */
 export async function navigateAndWaitForHydration(page: Page) {
-  await page.goto('http://localhost:3000/deployments/chat/ui');
-  await waitForHydration(page);
+  const maxRetries = 3;
+  const retryDelay = 2000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await page.goto('http://localhost:9876/deployments/chat/ui');
+      await waitForHydration(page);
+      return;
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
+        await page.waitForTimeout(retryDelay);
+        continue;
+      }
+      throw error;
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import { LlamaIndexServer } from "@llamaindex/server";
 
 new LlamaIndexServer({
+  port: 9876,
   uiConfig: {
     componentsDir: "components",
     layoutDir: "layout",

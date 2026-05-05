@@ -37,6 +37,9 @@ ENV/
 .env
 .env.local
 
+# Configuration with secrets
+config.yaml
+
 # Testing
 .pytest_cache/
 .coverage

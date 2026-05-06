@@ -15,9 +15,9 @@ def generate_index():
     """
     从多数据源生成索引
     """
-    from src.index import STORAGE_DIR, get_source_manager
-    from src.settings import init_settings
-    from src.datasource_config import get_enabled_datasources
+    from index import STORAGE_DIR, get_source_manager
+    from settings import init_settings
+    from datasource_config import get_enabled_datasources
     from llama_index.core.indices import VectorStoreIndex
     from llama_index.core.readers import SimpleDirectoryReader
 
@@ -90,3 +90,7 @@ def generate_index():
     # 持久化
     index.storage_context.persist(STORAGE_DIR)
     logger.info(f"Finished creating new index. Stored in {STORAGE_DIR}")
+
+
+if __name__ == "__main__":
+    generate_index()

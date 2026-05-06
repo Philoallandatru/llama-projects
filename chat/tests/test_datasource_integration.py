@@ -60,11 +60,11 @@ def test_datasource_import():
     print("\n=== 测试 3: datasource 包导入 ===")
 
     try:
-        from datasource.core.manager import DataSourceManager
-        print("  - DataSourceManager 导入成功")
+        from datasource.core.manager import SourceManager
+        print("  - SourceManager 导入成功")
 
-        from datasource.core.sources.local import LocalReader
-        print("  - LocalReader 导入成功")
+        from datasource.core.sources.local import LocalDataSource
+        print("  - LocalDataSource 导入成功")
 
         print("[OK] 包导入成功")
         return True
@@ -79,7 +79,7 @@ def test_local_datasource_loading():
     print("\n=== 测试 4: 本地数据源加载 ===")
 
     try:
-        from datasource.core.sources.local import LocalReader
+        from datasource.core.sources.local import LocalDataSource
     except ImportError:
         print("[SKIP] datasource 包未安装")
         return
@@ -102,19 +102,36 @@ def test_local_datasource_loading():
 
     print(f"  数据目录: {data_dir}")
 
-    # 创建 reader
-    reader = LocalReader(str(data_dir))
+    # 创建配置和 reader
+    from datasource.core.models import SourceConfig, SourceType
+    config = SourceConfig(
+        name="test_local",
+        type=SourceType.LOCAL,
+        path=str(data_dir)
+    )
+    reader = LocalDataSource(config)
     print(f"  Reader 创建成功")
 
-    # 加载文档
+    # 测试 fetch_raw
     try:
-        documents = reader.load_data()
-        print(f"  加载文档数量: {len(documents)}")
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmpdir:
+            raw_dir = Path(tmpdir) / "raw"
+            raw_dir.mkdir()
 
-        if documents:
-            doc = documents[0]
-            print(f"  示例文档: {doc.metadata.get('file_name', 'N/A')}")
-            print(f"  文档内容长度: {len(doc.text)} 字符")
+            # 抓取原始数据
+            items = list(reader.fetch_raw(raw_dir))
+            print(f"  抓取文件数量: {len(items)}")
+
+            if items:
+                item_id, raw_data = items[0]
+                print(f"  示例文件: {raw_data.get('file_name', 'N/A')}")
+
+                # 测试 build_document
+                assets_dir = Path(tmpdir) / "assets"
+                assets_dir.mkdir()
+                doc = reader.build_document(item_id, raw_data, assets_dir)
+                print(f"  文档内容长度: {len(doc.text)} 字符")
 
         print("[OK] 本地数据源加载成功")
     except Exception as e:
@@ -122,11 +139,11 @@ def test_local_datasource_loading():
 
 
 def test_manager_integration():
-    """测试 DataSourceManager 集成"""
-    print("\n=== 测试 5: DataSourceManager 集成 ===")
+    """测试 SourceManager 集成"""
+    print("\n=== 测试 5: SourceManager 集成 ===")
 
     try:
-        from datasource.core.manager import DataSourceManager
+        from datasource.core.manager import SourceManager
     except ImportError:
         print("[SKIP] datasource 包未安装")
         return
@@ -138,13 +155,11 @@ def test_manager_integration():
         return
 
     try:
-        manager = DataSourceManager(configs)
+        from pathlib import Path
+        data_dir = Path(__file__).parent.parent / "data"
+        manager = SourceManager(data_dir)
         print(f"  Manager 创建成功")
-        print(f"  数据源数量: {len(manager.readers)}")
-
-        for name in manager.readers.keys():
-            print(f"    - {name}")
-
+        print(f"  数据目录: {data_dir}")
         print("[OK] Manager 集成成功")
     except Exception as e:
         print(f"[WARN] Manager 创建失败: {e}")

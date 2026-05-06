@@ -100,4 +100,4 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["datasource", "chat", "data-explore", "deep-serach"]
+packages = ["datasource/datasource", "chat/src", "data-explore/src", "deep-serach/src"]

@@ -167,15 +167,3 @@ def create_llmwiki_tool():
             "The output will include citations with the format [citation:id] for each source."
         ),
     )
-
-
-# 全局实例（可选）
-_integration: Optional[LLMWikiIntegration] = None
-
-
-def get_llmwiki_integration() -> LLMWikiIntegration:
-    """获取全局 LLM Wiki 集成实例"""
-    global _integration
-    if _integration is None:
-        _integration = LLMWikiIntegration()
-    return _integration

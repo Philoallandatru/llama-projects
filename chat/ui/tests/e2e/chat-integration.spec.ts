@@ -2,83 +2,62 @@ import { test, expect } from '@playwright/test';
 import { navigateAndWaitForHydration } from '../helpers/wait-for-hydration';
 
 /**
- * E2E Tests for Datasource Integration
+ * E2E Tests for Chat Integration (Datasource + LLMWiki)
  *
- * These tests verify that the datasource query tool is properly integrated
- * and can be used through the chat interface to query indexed documents.
+ * These tests verify that the chat interface works correctly with both
+ * datasource and llmwiki query tools integrated.
  */
 
-test.describe('Datasource Integration', () => {
+test.describe('Chat Integration', () => {
   test.beforeEach(async ({ page }) => {
     await navigateAndWaitForHydration(page);
   });
 
   test('should have chat input available', async ({ page }) => {
-    // Check if chat input textarea is visible
     const textarea = page.locator('textarea[name="input"]');
     await expect(textarea).toBeVisible();
   });
 
   test('should allow typing in chat input', async ({ page }) => {
-    // Type in the chat input
     const textarea = page.locator('textarea[name="input"]');
     await textarea.fill('What is this project about?');
     await expect(textarea).toHaveValue('What is this project about?');
   });
 
   test('should have send button available', async ({ page }) => {
-    // Check if send button exists
     const buttons = page.locator('button');
     const buttonCount = await buttons.count();
     expect(buttonCount).toBeGreaterThan(0);
   });
 
   test('should send query and receive response', async ({ page }) => {
-    // Type a query
     const textarea = page.locator('textarea[name="input"]');
     await textarea.fill('Tell me about the project');
 
-    // Find and click send button (usually near the textarea)
     const sendButton = page.locator('button[type="submit"]').first();
     if (await sendButton.count() > 0) {
       await sendButton.click();
 
-      // Wait for response to appear
-      await page.waitForTimeout(3000);
+      // Wait for response to appear (check for new content)
+      await page.waitForLoadState('networkidle');
 
-      // Check if any new content appeared (messages, responses, etc.)
       const body = page.locator('body');
       await expect(body).toBeVisible();
     }
   });
 
-  test('should display chat interface elements', async ({ page }) => {
-    // Verify the page has proper chat interface structure
-    const textarea = page.locator('textarea[name="input"]');
-    await expect(textarea).toBeVisible();
-
-    // Check for buttons
-    const buttons = page.locator('button');
-    const buttonCount = await buttons.count();
-    expect(buttonCount).toBeGreaterThan(0);
-  });
-
   test('should handle empty query', async ({ page }) => {
-    // Try to send empty query
     const textarea = page.locator('textarea[name="input"]');
     await textarea.fill('');
 
     const sendButton = page.locator('button[type="submit"]').first();
     if (await sendButton.count() > 0) {
-      // Button might be disabled or query might be rejected
       const isDisabled = await sendButton.isDisabled();
-      // Either disabled or enabled is acceptable - just verify it exists
       expect(typeof isDisabled).toBe('boolean');
     }
   });
 
   test('should preserve input while typing', async ({ page }) => {
-    // Type progressively and verify value is preserved
     const textarea = page.locator('textarea[name="input"]');
 
     await textarea.fill('First');
@@ -92,7 +71,6 @@ test.describe('Datasource Integration', () => {
   });
 
   test('should handle long queries', async ({ page }) => {
-    // Create a long query
     const longQuery = 'This is a very long query that tests how the system handles extended input. '.repeat(5);
 
     const textarea = page.locator('textarea[name="input"]');
@@ -100,8 +78,23 @@ test.describe('Datasource Integration', () => {
     await expect(textarea).toHaveValue(longQuery);
   });
 
+  test('should handle special characters in queries', async ({ page }) => {
+    const specialQuery = 'What is the API endpoint /api/v1/query?';
+
+    const textarea = page.locator('textarea[name="input"]');
+    await textarea.fill(specialQuery);
+    await expect(textarea).toHaveValue(specialQuery);
+  });
+
+  test('should support multiline queries', async ({ page }) => {
+    const multilineQuery = 'Tell me about:\n1. The wiki system\n2. The data sources\n3. The query engine';
+
+    const textarea = page.locator('textarea[name="input"]');
+    await textarea.fill(multilineQuery);
+    await expect(textarea).toHaveValue(multilineQuery);
+  });
+
   test('should have interactive UI elements', async ({ page }) => {
-    // Verify the page has interactive elements
     const buttons = page.locator('button');
     const inputs = page.locator('input');
     const textareas = page.locator('textarea');
@@ -110,8 +103,7 @@ test.describe('Datasource Integration', () => {
     expect(totalInteractive).toBeGreaterThan(0);
   });
 
-  test('should load without console errors', async ({ page }) => {
-    // Listen for console errors
+  test('should load without critical console errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -119,19 +111,34 @@ test.describe('Datasource Integration', () => {
       }
     });
 
-    // Reload the page
     await page.reload();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
 
-    // Filter out known acceptable errors (like network errors for optional resources)
+    // Filter out known acceptable errors
     const criticalErrors = errors.filter(err =>
       !err.includes('favicon') &&
       !err.includes('404') &&
       !err.includes('net::ERR')
     );
 
-    // Should have minimal critical errors
     expect(criticalErrors.length).toBeLessThan(5);
+  });
+
+  test('should handle rapid query changes', async ({ page }) => {
+    const textarea = page.locator('textarea[name="input"]');
+
+    await textarea.fill('query 1');
+    await textarea.fill('query 2');
+    await textarea.fill('query 3');
+    await textarea.fill('final query');
+
+    await expect(textarea).toHaveValue('final query');
+  });
+
+  test('should maintain focus on input', async ({ page }) => {
+    const textarea = page.locator('textarea[name="input"]');
+    await textarea.click();
+    await textarea.fill('test query');
+    await expect(textarea).toHaveValue('test query');
   });
 });

@@ -10,10 +10,10 @@ dependencies = [
     "aiostream>=0.5.2,<0.6.0",
 
     # LlamaIndex core
-    "llama-index-core>=0.13.0",
+    "llama-index-core>=0.13.0,<0.14.0",
     "llama-index-readers-file>=0.4.6,<1.0.0",
     "llama-index-indices-managed-llama-cloud>=0.6.3,<1.0.0",
-    "llama-index-llms-openai>=0.4.0",
+    "llama-index-llms-openai>=0.4.0,<0.6.0",
     "llama-index-embeddings-openai>=0.4.0",
     "llama-index-retrievers-bm25>=0.2.0",
     "llama-index-readers-confluence",
@@ -89,15 +89,24 @@ strict_optional = false
 disable_error_code = ["return-value", "assignment"]
 
 [[tool.mypy.overrides]]
-module = ["datasource.*", "chat.*", "data_explore.*", "deep_serach.*"]
+module = ["datasource.*", "chat.*", "data_explore.*", "deep_serach.*", "jira_analysis.*"]
 ignore_missing_imports = false
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "playwright>=1.59.0",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=0.25.3",
+    "pytest-playwright>=0.7.2",
+    "pytest-timeout>=2.4.0",
+]
+
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["datasource/datasource", "chat/src", "data-explore/src", "deep-serach/src"]
+packages = ["datasource", "chat", "data-explore", "deep-serach", "jira-analysis", "llmwiki"]

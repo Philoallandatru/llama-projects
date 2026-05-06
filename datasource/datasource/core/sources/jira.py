@@ -14,11 +14,13 @@ import aiohttp
 import requests
 from requests.auth import HTTPBasicAuth
 from llama_index.core import Document
+from atlassian import Jira
 
 from .base import BaseDataSource
 from ..utils.pagination import Paginator
 from ..utils.retry import RetryHandler
 from ..utils.async_http import AsyncHTTPClient
+from ..metadata.field_extractor import JiraFieldExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +77,59 @@ class JiraDataSource(BaseDataSource):
             handle_rate_limit=True
         )
 
-        # 创建 session
-        self.session = requests.Session()
-        self.session.auth = HTTPBasicAuth(self.email, self.token)
-        self.session.headers.update({
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        })
+        # 初始化字段提取器
+        metadata_config = config.options.get("metadata_indexing", {})
+        if metadata_config.get("enabled", True):
+            field_config = metadata_config.get("indexed_fields", JiraFieldExtractor.get_default_config())
+            self.field_extractor = JiraFieldExtractor(field_config)
+        else:
+            self.field_extractor = None
+
+        # 配置要获取的字段
+        self.fetch_fields = self._build_fetch_fields(metadata_config)
+
+        # 使用 atlassian-python-api 创建 Jira 客户端
+        self.jira_client = Jira(
+            url=self.server,
+            username=self.email,
+            password=self.token,
+            cloud=True  # Atlassian Cloud
+        )
 
         logger.info(f"JiraDataSource initialized: server={self.server}, jql={self.jql}")
+
+    def _build_fetch_fields(self, metadata_config: Dict) -> str:
+        """构建 API 请求的 fields 参数
+
+        Args:
+            metadata_config: 元数据配置
+
+        Returns:
+            逗号分隔的字段列表
+        """
+        if not metadata_config.get("enabled", True):
+            # 默认字段
+            return "summary,description,status,priority,assignee,reporter,created,updated,comment"
+
+        # 从配置中提取所有字段名
+        field_names = set()
+
+        # 元数据字段
+        for field_config in metadata_config.get("indexed_fields", []):
+            field_names.add(field_config['field'])
+
+        # 全文检索字段
+        for field in metadata_config.get("fulltext_fields", []):
+            field_names.add(field.split('.')[0])  # 处理嵌套字段
+
+        # 向量化字段
+        for field in metadata_config.get("vector_fields", []):
+            field_names.add(field)
+
+        # 始终包含基础字段
+        field_names.update(['summary', 'description', 'created', 'updated', 'comment'])
+
+        return ','.join(field_names)
 
     def _build_jql(self, config: "SourceConfig", since: Optional[str] = None) -> str:
         """构建 JQL 查询语句
@@ -105,6 +151,17 @@ class JiraDataSource(BaseDataSource):
         elif config.project:
             base_jql = f"project = {config.project}"
 
+        # 提取并移除 ORDER BY 子句
+        order_by = ""
+        if base_jql:
+            import re
+            # 匹配 ORDER BY 及其后面的所有内容
+            match = re.search(r'ORDER\s+BY\s+.+$', base_jql, re.IGNORECASE)
+            if match:
+                order_by = match.group(0).strip()
+                # 移除 ORDER BY 部分，保留前面的条件
+                base_jql = base_jql[:match.start()].strip()
+
         # 添加增量同步时间过滤
         if since:
             # 将 ISO 8601 格式转换为 Jira 格式 (YYYY-MM-DD HH:mm)
@@ -116,17 +173,20 @@ class JiraDataSource(BaseDataSource):
                 time_filter = f"updated >= '{jira_time}'"
 
                 if base_jql:
-                    base_jql = f"({base_jql}) AND {time_filter}"
+                    base_jql = f"{base_jql} AND {time_filter}"
                 else:
                     base_jql = time_filter
             except ValueError:
                 logger.warning(f"Invalid since timestamp: {since}, ignoring time filter")
 
         # 添加排序
+        if not order_by:
+            order_by = "ORDER BY updated DESC"
+
         if base_jql:
-            return f"{base_jql} ORDER BY updated DESC"
+            return f"{base_jql} {order_by}"
         else:
-            return "ORDER BY updated DESC"
+            return order_by
 
     def fetch_raw(
         self,
@@ -144,35 +204,52 @@ class JiraDataSource(BaseDataSource):
         """
         # 构建 JQL（包含时间过滤）
         jql = self._build_jql(self.config, since)
-        logger.info(f"Starting Jira fetch with JQL: {jql}")
 
-        # 使用分页器获取所有 issue 列表
-        def fetch_func(start: int, limit: int) -> Dict[str, Any]:
-            url = f"{self.server}/rest/api/2/search"
-            params = {
-                "jql": jql,
-                "startAt": start,
-                "maxResults": limit,
-                "fields": "summary,description,status,priority,assignee,reporter,created,updated"
-            }
-            response = self._request_with_retry("GET", url, params=params)
-            return response.json()
+        logger.info("=" * 60)
+        logger.info("Starting Jira data fetch")
+        logger.info(f"Server: {self.server}")
+        logger.info(f"JQL: {jql}")
+        logger.info(f"Since: {since or 'Full sync'}")
+        logger.info("=" * 60)
 
-        issues = Paginator.paginate(
-            fetch_func,
-            page_size=self.max_results,
-            results_key="issues",
-            size_key="maxResults"  # Jira 返回的是 maxResults 而不是实际大小
-        )
+        # 使用 atlassian-python-api 的 jql 方法获取所有 issues
+        logger.info("Fetching issue list...")
+
+        start_at = 0
+        all_issues = []
+
+        while True:
+            result = self.jira_client.jql(
+                jql=jql,
+                start=start_at,
+                limit=self.max_results,
+                fields=self.fetch_fields
+            )
+
+            issues = result.get("issues", [])
+            if not issues:
+                break
+
+            all_issues.extend(issues)
+
+            total = result.get("total", 0)
+            if start_at + len(issues) >= total:
+                break
+
+            start_at += len(issues)
+
+        total_issues = len(all_issues)
+        logger.info(f"Found {total_issues} issues to fetch")
 
         # 逐个获取详细信息
-        total_fetched = 0
-        for issue in issues:
+        for idx, issue in enumerate(all_issues, 1):
             issue_key = issue["key"]
 
             try:
-                # 获取完整的 issue 数据（包含 comments）
-                full_issue = self._fetch_issue_details(issue_key)
+                logger.info(f"[{idx}/{total_issues}] Fetching issue detail: {issue_key}")
+
+                # 使用 atlassian-python-api 获取完整的 issue 数据
+                full_issue = self.jira_client.issue(issue_key, fields="*all", expand="changelog,renderedFields")
 
                 # 保存原始数据
                 issue_file = output_dir / f"{self._sanitize_filename(issue_key)}.json"
@@ -181,16 +258,18 @@ class JiraDataSource(BaseDataSource):
                     encoding="utf-8"
                 )
 
-                total_fetched += 1
-                logger.info(f"Fetched issue {issue_key} ({total_fetched})")
+                summary = full_issue.get('fields', {}).get('summary', 'No summary')
+                logger.info(f"[{idx}/{total_issues}] ✓ Saved: {issue_key} - {summary}")
 
                 yield issue_key, full_issue
 
             except Exception as e:
-                logger.error(f"Failed to fetch issue {issue_key}: {e}")
+                logger.error(f"[{idx}/{total_issues}] ✗ Failed to fetch issue {issue_key}: {e}")
                 continue
 
-        logger.info(f"Jira fetch completed: {total_fetched} issues")
+        logger.info("=" * 60)
+        logger.info(f"Jira fetch completed: {total_issues} issues")
+        logger.info("=" * 60)
 
     def _fetch_issues_page(self, start_at: int, jql: Optional[str] = None) -> list:
         """获取一页 issues
@@ -202,7 +281,7 @@ class JiraDataSource(BaseDataSource):
         Returns:
             Issue 列表
         """
-        url = f"{self.server}/rest/api/2/search"
+        url = f"{self.server}/rest/api/3/search"
         params = {
             "jql": jql if jql is not None else self.jql,
             "startAt": start_at,
@@ -215,46 +294,6 @@ class JiraDataSource(BaseDataSource):
 
         return data.get("issues", [])
 
-    def _fetch_issue_details(self, issue_key: str) -> Dict[str, Any]:
-        """获取 issue 详细信息（包含 comments）
-
-        Args:
-            issue_key: Issue key (如 PROJ-123)
-
-        Returns:
-            完整的 issue 数据
-        """
-        url = f"{self.server}/rest/api/2/issue/{issue_key}"
-        params = {
-            "expand": "renderedFields,names,schema,transitions,operations,changelog,comments"
-        }
-
-        response = self._request_with_retry("GET", url, params=params)
-        return response.json()
-
-    def _request_with_retry(
-        self,
-        method: str,
-        url: str,
-        **kwargs
-    ) -> requests.Response:
-        """带重试的 HTTP 请求
-
-        Args:
-            method: HTTP 方法
-            url: 请求 URL
-            **kwargs: 其他请求参数
-
-        Returns:
-            Response 对象
-
-        Raises:
-            requests.RequestException: 请求失败
-        """
-        def make_request():
-            return self.session.request(method, url, **kwargs)
-
-        return self.retry_handler.execute(make_request)
 
     def build_document(
         self,
@@ -333,21 +372,29 @@ class JiraDataSource(BaseDataSource):
                     except Exception as e:
                         logger.warning(f"Failed to download attachment {filename}: {e}")
 
-        # 构建元数据
-        metadata = {
+        # 提取元数据
+        if self.field_extractor:
+            metadata = self.field_extractor.extract(raw_data)
+        else:
+            # 回退到默认提取
+            metadata = {
+                "issue_key": item_id,
+                "status": fields.get('status', {}).get('name', 'Unknown'),
+                "priority": fields.get('priority', {}).get('name', 'Unknown'),
+                "created": fields.get('created', 'Unknown'),
+                "updated": fields.get('updated', 'Unknown'),
+            }
+
+        # 添加数据源信息
+        metadata.update({
             "source_name": self.config.name,
             "source_type": "jira",
             "item_id": item_id,
-            "issue_key": item_id,
-            "status": fields.get('status', {}).get('name', 'Unknown'),
-            "priority": fields.get('priority', {}).get('name', 'Unknown'),
-            "created": fields.get('created', 'Unknown'),
-            "updated": fields.get('updated', 'Unknown'),
             "has_attachments": len(attachment_paths) > 0,
             "attachment_count": len(attachment_paths),
             "attachment_paths": attachment_paths,
             "comment_count": len(comments)
-        }
+        })
 
         # 创建 Document
         text = "\n".join(content_parts)
@@ -519,7 +566,7 @@ class JiraDataSource(BaseDataSource):
         start_at = 0
 
         while True:
-            url = f"{self.server}/rest/api/2/search"
+            url = f"{self.server}/rest/api/3/search"
             params = {
                 "jql": jql,
                 "startAt": start_at,
@@ -567,7 +614,7 @@ class JiraDataSource(BaseDataSource):
         Returns:
             完整的 issue 数据
         """
-        url = f"{self.server}/rest/api/2/issue/{issue_key}"
+        url = f"{self.server}/rest/api/3/issue/{issue_key}"
         params = {
             "expand": "renderedFields,names,schema,transitions,operations,changelog,comments"
         }

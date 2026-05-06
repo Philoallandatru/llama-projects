@@ -4,7 +4,13 @@ Jira issue 深度分析系统，基于 LlamaIndex Workflows。
 
 ## 项目状态
 
-🚧 **Phase 1 开发中** | **设计文档**: `.planning/jira-analysis-design.md`
+✅ **Phase 4 已完成** | **进度**: 80% (4/5)
+
+- ✅ Phase 1: 核心组件
+- ✅ Phase 2: Deep Analysis Workflow
+- ✅ Phase 3: Batch Analysis Workflow
+- ✅ Phase 4: 配置和部署（FastAPI 服务器）
+- ⏳ Phase 5: UI 和测试
 
 ## 功能特性
 
@@ -26,7 +32,7 @@ uv sync
 
 ### 2. 配置环境变量
 
-创建 `.env` 文件：
+创建 `src/.env` 文件：
 
 ```bash
 # Jira 配置
@@ -60,14 +66,14 @@ uv run datasource index jira --strategy vector
 ```bash
 cd ../jira-analysis/
 
-# 启动 LlamaDeploy API 服务器（终端 1）
-uv run -m llama_deploy.apiserver
+# 启动 FastAPI 服务器（终端 1）
+uv run uvicorn src.api_server:app --host 0.0.0.0 --port 4501
 
-# 部署工作流（终端 2）
-uv run llamactl deploy llama_deploy.yml
+# 启动简单 UI（终端 2，可选）
+cd ui && python -m http.server 3001
 
 # 访问 UI
-# http://localhost:4501/deployments/jira-analysis/ui
+# http://localhost:3001/simple-ui.html
 ```
 
 ## 使用示例
@@ -75,24 +81,41 @@ uv run llamactl deploy llama_deploy.yml
 ### 深度分析单个 issue
 
 ```bash
-curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
+curl -X POST 'http://localhost:4501/api/analyze' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"issue_key\":\"NVME-777\",\"mode\":\"strict\"}",
-    "service_id": "deep-analysis"
+    "issue_key": "NVME-777",
+    "mode": "balanced",
+    "retrieve_evidence": true
   }'
 ```
 
 ### 批量分析
 
 ```bash
-curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
+# 使用 issue keys 列表
+curl -X POST 'http://localhost:4501/api/batch-analyze' \
   -H 'Content-Type: application/json' \
   -d '{
-    "input": "{\"issue_keys\":[\"NVME-777\",\"NVME-778\"],\"mode\":\"strict\"}",
-    "service_id": "batch-analysis"
+    "issue_keys": ["NVME-777", "NVME-778"],
+    "mode": "balanced",
+    "max_concurrent": 3,
+    "generate_summary": true
+  }'
+
+# 使用 JQL 查询
+curl -X POST 'http://localhost:4501/api/batch-analyze' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jql": "project=NVME AND created>=2024-01-01",
+    "mode": "balanced",
+    "max_concurrent": 3
   }'
 ```
+
+### 使用 Web UI
+
+访问 http://localhost:3001/simple-ui.html 使用图形界面进行分析。
 
 ## 分析 Profiles
 
@@ -103,10 +126,12 @@ curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
 - **Change Impact（变更影响）**：变更类 → 影响范围、风险评估、依赖分析
 - **General（通用分析）**：其他类型 → 问题概述、相关证据、分析结论
 
+配置文件：`src/profiles/config.json`
+
 ## 分析模式
 
 - **strict**: 严格模式，只基于明确证据
-- **balanced**: 平衡模式，允许合理推断
+- **balanced**: 平衡模式，允许合理推断（默认）
 - **exploratory**: 探索模式，提出假设和可能性
 
 ## 项目结构
@@ -114,47 +139,47 @@ curl -X POST 'http://localhost:4501/deployments/jira-analysis/tasks/create' \
 ```
 jira-analysis/
 ├── src/
+│   ├── api_server.py                 # ✅ FastAPI 服务器
 │   ├── workflows/
-│   │   ├── deep_analysis.py          # 深度分析 workflow
-│   │   └── batch_analysis.py         # 批量分析 workflow
+│   │   ├── deep_analysis.py          # ✅ 深度分析 workflow
+│   │   └── batch_analysis.py         # ✅ 批量分析 workflow
 │   ├── core/
-│   │   ├── issue_loader.py           # 实时加载 Jira issue
-│   │   ├── router.py                 # Issue type 路由
-│   │   ├── retriever.py              # 跨源证据检索
-│   │   ├── prompt_builder.py         # Prompt 构建
-│   │   └── llm_client.py             # LLM 调用封装
+│   │   ├── issue_loader.py           # ✅ 实时加载 Jira issue
+│   │   ├── router.py                 # ✅ Issue type 路由
+│   │   ├── retriever.py              # ✅ 跨源证据检索
+│   │   ├── prompt_builder.py         # ✅ Prompt 构建
+│   │   └── llm_client.py             # ✅ LLM 调用封装
 │   ├── profiles/
-│   │   ├── config.json               # Issue type → profile 映射
-│   │   └── prompts/                  # Prompt 模板
-│   └── settings.py                   # 配置管理
-├── ui/                               # TypeScript UI
-├── tests/                            # 测试用例
-└── llama_deploy.yml                  # 部署配置
+│   │   ├── config.json               # ✅ Issue type → profile 映射
+│   │   └── prompts/                  # ✅ Prompt 模板
+│   │       ├── rca.txt
+│   │       ├── traceability.txt
+│   │       ├── change_impact.txt
+│   │       └── general.txt
+│   └── settings.py                   # ✅ 配置管理
+├── ui/                               # ✅ 简单 HTML UI
+├── tests/                            # ✅ 测试用例
+├── config.yaml                       # ✅ 配置文件
+└── README.md
 ```
 
 ## 工作流程
 
-### DeepAnalysisWorkflow（深度分析）
+### DeepAnalysisWorkflow（深度分析）✅
 
 1. **Load Issue**: 实时从 Jira API 拉取 issue 数据
 2. **Route Profile**: 根据 issue type 选择分析 profile
 3. **Retrieve Evidence**: 从索引中检索相似 issues 和相关文档
 4. **Generate Analysis**: 调用 LLM 生成分析报告（支持流式输出）
 5. **Format Output**: 格式化输出结果
+6. **Save Knowledge**: 保存到知识库
 
-### BatchAnalysisWorkflow（批量分析）
+### BatchAnalysisWorkflow（批量分析）✅
 
 1. **Start**: 接收 issue keys 列表或 JQL 查询
-2. **Batch Analyze**: 并发分析多个 issues（控制并发数）
-3. **Generate Summary**: 生成汇总报告
-
-## 实现计划
-
-- ✅ **Phase 1**: 核心组件（IssueLoader, Router, Retriever, PromptBuilder, LLMClient）
-- 🚧 **Phase 2**: Deep Analysis Workflow
-- ⏳ **Phase 3**: Batch Analysis Workflow
-- ⏳ **Phase 4**: 配置和部署
-- ⏳ **Phase 5**: UI 和测试
+2. **Load Batch**: 批量加载 issues
+3. **Analyze Batch**: 并发分析多个 issues（控制并发数）
+4. **Generate Report**: 生成汇总报告
 
 ## 测试
 
@@ -165,7 +190,7 @@ jira-analysis/
 uv run pytest
 
 # 运行特定测试
-uv run pytest tests/test_router.py -v
+uv run pytest tests/test_deep_analysis_workflow.py -v
 
 # 排除 E2E 测试
 uv run pytest tests/ -v --ignore=tests/e2e/
@@ -180,10 +205,6 @@ uv run playwright install chromium
 
 # 运行 E2E 测试
 uv run pytest tests/e2e/ -v
-
-# 使用快速启动脚本
-bash scripts/run-e2e-tests.sh  # Linux/Mac
-scripts\run-e2e-tests.bat      # Windows
 ```
 
 详细信息请参见 [E2E 测试文档](docs/E2E_TESTING.md)。
@@ -204,6 +225,16 @@ uv run ruff format src/
 2. **索引检索证据**：相似 issues 和文档从预建索引中检索，提升性能
 3. **配置驱动**：通过 `profiles/config.json` 配置 issue type 路由规则
 4. **流式输出**：支持流式生成，实时 UI 反馈
+5. **事件驱动**：基于 LlamaIndex Workflow 的事件驱动架构
+
+## 文档
+
+- [PHASE2_COMPLETE.md](PHASE2_COMPLETE.md) - Phase 2 完成总结
+- [PHASE3_COMPLETE.md](PHASE3_COMPLETE.md) - Phase 3 完成总结
+- [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) - 项目总体概述
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) - 实现细节
+- [USAGE.md](USAGE.md) - 使用指南
+- [LOCAL_TEST.md](LOCAL_TEST.md) - 本地测试指南
 
 ## 许可证
 

@@ -5,66 +5,88 @@
 支持 Local、Jira、Confluence 三种数据源类型。
 """
 
-import os
+from pathlib import Path
 from typing import List, Dict, Any
-from dotenv import load_dotenv
-
-load_dotenv()
+import yaml
 
 
-# 数据源配置列表
-DATASOURCES: List[Dict[str, Any]] = [
+def load_config():
+    """加载配置文件"""
+    config_path = Path(__file__).parent.parent / "config.yaml"
+    if not config_path.exists():
+        raise RuntimeError(f"配置文件不存在: {config_path}")
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+
+def get_datasources() -> List[Dict[str, Any]]:
+    """从配置文件获取数据源列表"""
+    config = load_config()
+    datasources_config = config.get('datasources', {})
+
+    datasources = []
+
     # 本地文件数据源
-    {
-        "name": "local_docs",
-        "type": "local",
-        "enabled": True,
-        "config": {
-            "directory": os.getenv("LOCAL_DATA_DIR", "./data"),
-            "recursive": True,
-        },
-        "description": "本地文档数据源（Markdown, PDF, TXT 等）"
-    },
+    if datasources_config.get('local', {}).get('enabled', False):
+        local_config = datasources_config['local']
+        datasources.append({
+            "name": "local_docs",
+            "type": "local",
+            "enabled": True,
+            "config": {
+                "directory": local_config.get('data_dir', './data'),
+                "recursive": True,
+            },
+            "description": "本地文档数据源（Markdown, PDF, TXT 等）"
+        })
 
-    # Jira 数据源（可选）
-    {
-        "name": "jira_issues",
-        "type": "jira",
-        "enabled": os.getenv("JIRA_ENABLED", "false").lower() == "true",
-        "config": {
-            "server_url": os.getenv("JIRA_SERVER_URL", ""),
-            "email": os.getenv("JIRA_EMAIL", ""),
-            "token": os.getenv("JIRA_TOKEN", ""),
-            "jql": os.getenv("JIRA_JQL", "project = PROJ ORDER BY updated DESC"),
-        },
-        "description": "Jira 问题跟踪数据源"
-    },
+    # Jira 数据源
+    if datasources_config.get('jira', {}).get('enabled', False):
+        jira_config = datasources_config['jira']
+        datasources.append({
+            "name": "jira_issues",
+            "type": "jira",
+            "enabled": True,
+            "config": {
+                "server_url": jira_config.get('server', ''),
+                "email": jira_config.get('email', ''),
+                "token": jira_config.get('token', ''),
+                "jql": jira_config.get('jql', 'ORDER BY updated DESC'),
+            },
+            "description": "Jira 问题跟踪数据源"
+        })
 
-    # Confluence 数据源（可选）
-    {
-        "name": "confluence_docs",
-        "type": "confluence",
-        "enabled": os.getenv("CONFLUENCE_ENABLED", "false").lower() == "true",
-        "config": {
-            "base_url": os.getenv("CONFLUENCE_BASE_URL", ""),
-            "email": os.getenv("CONFLUENCE_EMAIL", ""),
-            "token": os.getenv("CONFLUENCE_TOKEN", ""),
-            "space_key": os.getenv("CONFLUENCE_SPACE_KEY", ""),
-            "cql": os.getenv("CONFLUENCE_CQL", ""),
-        },
-        "description": "Confluence 文档数据源"
-    },
-]
+    # Confluence 数据源
+    if datasources_config.get('confluence', {}).get('enabled', False):
+        confluence_config = datasources_config['confluence']
+        datasources.append({
+            "name": "confluence_docs",
+            "type": "confluence",
+            "enabled": True,
+            "config": {
+                "base_url": confluence_config.get('url', ''),
+                "email": confluence_config.get('username', ''),
+                "token": confluence_config.get('token', ''),
+                "space_key": confluence_config.get('space_key', ''),
+                "cql": confluence_config.get('cql', ''),
+            },
+            "description": "Confluence 文档数据源"
+        })
+
+    return datasources
 
 
 def get_enabled_datasources() -> List[Dict[str, Any]]:
     """获取启用的数据源列表"""
-    return [ds for ds in DATASOURCES if ds.get("enabled", True)]
+    datasources = get_datasources()
+    return [ds for ds in datasources if ds.get("enabled", True) and validate_datasource_config(ds)]
 
 
 def get_datasource_by_name(name: str) -> Dict[str, Any] | None:
     """根据名称获取数据源配置"""
-    for ds in DATASOURCES:
+    datasources = get_datasources()
+    for ds in datasources:
         if ds["name"] == name:
             return ds
     return None
@@ -82,7 +104,7 @@ def validate_datasource_config(datasource: Dict[str, Any]) -> bool:
         return bool(config.get("directory"))
 
     elif ds_type == "jira":
-        required = ["server_url", "email", "token", "jql"]
+        required = ["server_url", "email", "token"]
         return all(config.get(key) for key in required)
 
     elif ds_type == "confluence":
@@ -98,7 +120,8 @@ def print_datasource_status():
     """打印数据源状态"""
     print("\n=== 数据源配置状态 ===\n")
 
-    for ds in DATASOURCES:
+    datasources = get_datasources()
+    for ds in datasources:
         name = ds["name"]
         enabled = ds.get("enabled", True)
         valid = validate_datasource_config(ds)

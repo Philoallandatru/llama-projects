@@ -91,11 +91,13 @@ curl -X POST http://localhost:4501/api/batch-analyze \
 # - 生成汇总报告（主要发现、共性问题、建议行动项）
 ```
 
-### 下一步：Phase 4 - 配置和部署
+### 下一步：Phase 4 - 生产部署
 
-- [ ] LlamaDeploy 配置文件
-- [ ] Docker 容器化
-- [ ] 环境变量管理
+- [ ] Docker 容器化（Dockerfile + docker-compose.yml）
+- [ ] 环境变量管理（.env 配置）
+- [ ] 进程管理（Supervisor 或 systemd）
+- [ ] 反向代理配置（Nginx）
+- [ ] 日志和监控
 - [ ] 生产环境部署指南
 
 ---

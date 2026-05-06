@@ -109,4 +109,4 @@ dev = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["datasource", "chat", "data-explore", "deep-serach", "jira-analysis"]
+packages = ["datasource", "chat", "data-explore", "deep-serach", "jira-analysis", "llmwiki"]

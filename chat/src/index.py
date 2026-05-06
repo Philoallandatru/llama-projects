@@ -17,11 +17,11 @@ DATA_DIR = "src/datasource_data"  # datasource 数据目录
 def get_source_manager():
     """获取 SourceManager 实例"""
     try:
-        from core.manager import SourceManager
-        from core.paths import PathManager
+        from pathlib import Path
+        from datasource.core.manager import SourceManager
 
-        path_manager = PathManager(base_dir=DATA_DIR)
-        return SourceManager(path_manager)
+        data_dir = Path(DATA_DIR)
+        return SourceManager(data_dir)
     except ImportError as e:
         logger.error(f"Failed to import datasource: {e}")
         logger.error("Make sure datasource is installed: cd ../datasource && pip install -e .")

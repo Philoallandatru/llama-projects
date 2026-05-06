@@ -1,0 +1,26 @@
+# LLM Wiki Configuration
+
+jira:
+  url: https://sakiko222.atlassian.net
+  username: ${JIRA_EMAIL}
+  api_token: ${JIRA_API_TOKEN}
+
+confluence:
+  url: https://sakiko222.atlassian.net/wiki
+  username: ${CONFLUENCE_EMAIL}
+  api_token: ${CONFLUENCE_API_TOKEN}
+
+sync:
+  interval_hours: 24
+  include_comments: true
+  include_attachments: false
+
+llm:
+  provider: openai  # Using OpenAI-compatible API (LM Studio)
+  model: qwen3.5-0.8b
+  api_key: lm-studio
+  base_url: http://127.0.0.1:1234/v1
+
+paths:
+  sources: llmwiki/sources
+  wiki: llmwiki/wiki

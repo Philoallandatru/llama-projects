@@ -118,10 +118,10 @@ class BatchAnalysisWorkflow(Workflow):
         retrieve_evidence = ev.get("retrieve_evidence", True)
         generate_summary = ev.get("generate_summary", True)
 
-        await ctx.set("issue_keys", issue_keys)
-        await ctx.set("mode", mode)
-        await ctx.set("retrieve_evidence", retrieve_evidence)
-        await ctx.set("generate_summary", generate_summary)
+        await ctx.store.set("issue_keys", issue_keys)
+        await ctx.store.set("mode", mode)
+        await ctx.store.set("retrieve_evidence", retrieve_evidence)
+        await ctx.store.set("generate_summary", generate_summary)
 
         logger.info(f"Starting batch analysis for {len(issue_keys)} issues in {mode} mode")
 
@@ -155,7 +155,7 @@ class BatchAnalysisWorkflow(Workflow):
 
         # 批量加载
         issues_data = await loader.load_issues_batch(ev.issue_keys)
-        await ctx.set("issues_data", issues_data)
+        await ctx.store.set("issues_data", issues_data)
 
         ctx.write_event_to_stream(
             BatchProgressEvent(
@@ -179,9 +179,9 @@ class BatchAnalysisWorkflow(Workflow):
         Returns:
             GenerateReportEvent
         """
-        issues_data = await ctx.get("issues_data")
-        mode = await ctx.get("mode")
-        retrieve_evidence = await ctx.get("retrieve_evidence")
+        issues_data = await ctx.store.get("issues_data")
+        mode = await ctx.store.get("mode")
+        retrieve_evidence = await ctx.store.get("retrieve_evidence")
 
         # 初始化组件
         router = Router(self.profiles_dir / "config.json")
@@ -267,7 +267,7 @@ class BatchAnalysisWorkflow(Workflow):
         tasks = [analyze_one(issue_data, i) for i, issue_data in enumerate(issues_data)]
         results = await asyncio.gather(*tasks)
 
-        await ctx.set("results", results)
+        await ctx.store.set("results", results)
 
         success_count = sum(1 for r in results if r["status"] == "success")
         ctx.write_event_to_stream(
@@ -292,8 +292,8 @@ class BatchAnalysisWorkflow(Workflow):
         Returns:
             StopEvent
         """
-        results = await ctx.get("results")
-        generate_summary = await ctx.get("generate_summary", default=True)
+        results = await ctx.store.get("results")
+        generate_summary = await ctx.store.get("generate_summary", default=True)
 
         # 统计信息
         total = len(results)

@@ -2,25 +2,26 @@
 
 # Jira 配置
 jira:
-  server: "https://sakiko222.atlassian.net"
-  email: "${JIRA_EMAIL}"  # Set via environment variable
-  token: "${JIRA_API_TOKEN}"  # Set via environment variable
-  project: "KAN"
+  server: "https://your-domain.atlassian.net"
+  email: "your-email@example.com"
+  token: "your-jira-api-token"
+  project: "YOUR_PROJECT"
 
 # LLM 配置
 llm:
   base_url: "http://127.0.0.1:1234/v1"  # LM Studio 默认地址
-  model: "qwen3.5-4b"  # LM Studio 中加载的模型名称
+  model: "qwen3.5-0.8b"  # 使用快速测试模型
   temperature: 0.1
   max_tokens: 4096
   api_key: "lm-studio"  # LM Studio 不需要真实 API key
+  embedding_model: "text-embedding-3-small"  # Use OpenAI-compatible name for LM Studio
 
 # 索引配置
 index:
-  base_path: "../datasource/data/indexes"
+  base_path: "../datasource/data/sources"
   # 可用的索引类型
   sources:
-    - jira
+    - jira_kan
     - confluence
     - specs
 

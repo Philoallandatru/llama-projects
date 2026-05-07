@@ -73,19 +73,30 @@ class IssueLoader:
             Exception: 拉取失败
         """
         auth = aiohttp.BasicAuth(self.email, self.token)
+        url = f"{self.server}/rest/api/3/issue/{issue_key}"
+
+        logger.info(f"Loading issue from URL: {url}")
 
         async with aiohttp.ClientSession(auth=auth) as session:
-            url = f"{self.server}/rest/api/2/issue/{issue_key}"
-            params = {
-                "expand": "renderedFields,names,schema,transitions,operations,changelog,comments"
-            }
-
             try:
-                data = await self.http_client.get_json(session, url, params=params)
-                logger.info(f"Loaded issue: {issue_key}")
-                return data
-            except Exception as e:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    logger.info(f"Response status: {response.status}")
+
+                    if response.status == 404:
+                        text = await response.text()
+                        logger.error(f"404 error response: {text}")
+                        raise Exception(f"Issue {issue_key} not found: {text}")
+
+                    response.raise_for_status()
+                    data = await response.json()
+                    logger.info(f"Successfully loaded issue: {issue_key}")
+                    return data
+
+            except aiohttp.ClientError as e:
                 logger.error(f"Failed to load issue {issue_key}: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Unexpected error loading issue {issue_key}: {e}")
                 raise
 
     async def load_issues_batch(self, issue_keys: List[str]) -> List[Dict[str, Any]]:
@@ -140,7 +151,7 @@ class IssueLoader:
         Returns:
             Issue 数据
         """
-        url = f"{self.server}/rest/api/2/issue/{issue_key}"
+        url = f"{self.server}/rest/api/3/issue/{issue_key}"
         params = {
             "expand": "renderedFields,names,schema,transitions,operations,changelog,comments"
         }
@@ -169,7 +180,7 @@ class IssueLoader:
             page_size = 50
 
             while len(issue_keys) < max_results:
-                url = f"{self.server}/rest/api/2/search"
+                url = f"{self.server}/rest/api/3/search"
                 params = {
                     "jql": jql,
                     "startAt": start_at,

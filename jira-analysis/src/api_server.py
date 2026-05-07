@@ -11,8 +11,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.settings import settings, init_settings
-from src.workflows.deep_analysis import DeepAnalysisWorkflow
-from src.workflows.batch_analysis import BatchAnalysisWorkflow
+from src.workflow_modules.deep_analysis import DeepAnalysisWorkflow
+from src.workflow_modules.batch_analysis import BatchAnalysisWorkflow
 
 
 # Request models
@@ -38,10 +38,22 @@ batch_analysis_workflow: BatchAnalysisWorkflow | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize workflows on startup."""
+    import os
+    from pathlib import Path
+
     global deep_analysis_workflow, batch_analysis_workflow
+
+    # Debug: print working directory and paths
+    print(f"[API SERVER] Working directory: {os.getcwd()}")
+    print(f"[API SERVER] __file__: {__file__}")
+    print(f"[API SERVER] Resolved __file__: {Path(__file__).resolve()}")
 
     # Initialize settings
     init_settings()
+
+    print(f"[API SERVER] index_base_path from settings: {settings.index_base_path}")
+    print(f"[API SERVER] Resolved index_base_path: {Path(settings.index_base_path).resolve()}")
+    print(f"[API SERVER] Index path exists: {Path(settings.index_base_path).exists()}")
 
     # Create workflow instances
     deep_analysis_workflow = DeepAnalysisWorkflow(timeout=300)

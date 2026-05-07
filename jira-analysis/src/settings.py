@@ -49,6 +49,7 @@ def load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         flat_config["llm_temperature"] = llm.get("temperature")
         flat_config["llm_max_tokens"] = llm.get("max_tokens")
         flat_config["llm_api_key"] = llm.get("api_key")
+        flat_config["llm_embedding_model"] = llm.get("embedding_model")
 
     # 索引配置
     if index := config.get("index"):
@@ -84,12 +85,15 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_max_tokens: int = 4096
     llm_api_key: str = "ollama"
+    llm_embedding_model: str = "text-embedding-3-small"
 
     # 索引路径
-    index_base_path: str = "../datasource/data/indexes"
+    index_base_path: str = "../../datasource/data/sources"
 
     # Profiles 配置
-    profiles_dir: str = "./src/profiles"
+    profiles_dir: str = Field(
+        default_factory=lambda: str(Path(__file__).parent / "profiles")
+    )
 
     # 批量分析配置
     batch_max_concurrent: int = 5
@@ -161,6 +165,10 @@ def init_settings():
     from llama_index.llms.openai import OpenAI
     from llama_index.embeddings.openai import OpenAIEmbedding
 
+    print(f"[INIT] Initializing settings with embedding model: {settings.llm_embedding_model}")
+    print(f"[INIT] LLM base URL: {settings.llm_base_url}")
+    print(f"[INIT] API key: {settings.llm_api_key}")
+
     # 配置 LLM
     LlamaSettings.llm = OpenAI(
         model="gpt-3.5-turbo",  # 使用已知模型名称通过验证
@@ -171,10 +179,12 @@ def init_settings():
         timeout=300
     )
 
-    # 配置 Embedding
+    # 配置 Embedding - 使用配置的 embedding 模型
+    print(f"[INIT] Creating OpenAIEmbedding with model: {settings.llm_embedding_model}")
     LlamaSettings.embed_model = OpenAIEmbedding(
-        model="text-embedding-3-small",
+        model=settings.llm_embedding_model,
         api_base=settings.llm_base_url,
         api_key=settings.llm_api_key,
         timeout=300
     )
+    print(f"[INIT] Embedding model initialized successfully")

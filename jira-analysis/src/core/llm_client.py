@@ -6,7 +6,7 @@
 import logging
 from typing import AsyncIterator, Dict, Any
 
-from llama_index.llms.openai import OpenAI
+from llama_index.llms.openai_like import OpenAILike
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +36,14 @@ class LLMClient:
         self.temperature = config.get("temperature", 0.1)
         self.max_tokens = config.get("max_tokens", 4096)
 
-        # 创建 LLM 实例
-        self.llm = OpenAI(
+        # 创建 LLM 实例 - 使用 OpenAILike 支持本地模型
+        self.llm = OpenAILike(
             api_base=self.base_url,
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             is_chat_model=True,
-            api_key="dummy"  # 本地模型不需要真实 API key
+            api_key="lm-studio"  # 本地模型不需要真实 API key
         )
 
         logger.info(

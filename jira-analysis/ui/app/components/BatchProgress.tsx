@@ -2,16 +2,12 @@
 
 import { CheckCircle2, Loader2, Circle, XCircle, Clock } from "lucide-react";
 import { calculatePercentage, formatTime } from "@/lib/utils";
+import type { BatchProgressEvent } from "@/types/events";
 
 interface BatchProgressProps {
   total: number;
   current: number;
-  items: Array<{
-    key: string;
-    status: "pending" | "running" | "completed" | "error";
-    profile?: string;
-    message?: string;
-  }>;
+  items: BatchProgressEvent["data"]["items"];
   estimatedTimeRemaining?: number;
 }
 

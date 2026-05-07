@@ -8,71 +8,21 @@ import { useSSEStream } from "@/hooks/useSSEStream";
 
 export default function DeepAnalysisPage() {
   const [issueKey, setIssueKey] = useState("");
-  const [events, setEvents] = useState<any[]>([]);
-  const [results, setResults] = useState<any>(null);
 
-  const { startStream, isStreaming } = useSSEStream({
-    url: `http://localhost:4501/api/analyze`,
-    onProgress: (data) => {
-      setEvents((prev) => [...prev.slice(-99), data]); // Sliding window: keep last 100
-    },
-    onResult: (data) => {
-      setResults(data);
-    },
+  const { events, results, isStreaming, startAnalysis, reset } = useSSEStream({
+    url: "http://localhost:4501/api/analyze",
     maxEvents: 100,
   });
 
   const handleAnalyze = async () => {
     if (!issueKey.trim()) return;
 
-    setEvents([]);
-    setResults(null);
-
-    // Start SSE stream with POST body
-    try {
-      const response = await fetch("http://localhost:4501/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          issue_key: issueKey.trim(),
-          mode: "balanced",
-          retrieve_evidence: true,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to start analysis");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) throw new Error("No response body");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === "ProgressEvent" || data.type === "progress") {
-                setEvents((prev) => [...prev.slice(-99), data]);
-              } else if (data.type === "result") {
-                setResults(data.data);
-              }
-            } catch (e) {
-              console.error("Failed to parse SSE data:", e);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Analysis failed:", error);
-    }
+    reset();
+    await startAnalysis({
+      issue_key: issueKey.trim(),
+      mode: "balanced",
+      retrieve_evidence: true,
+    });
   };
 
   return (

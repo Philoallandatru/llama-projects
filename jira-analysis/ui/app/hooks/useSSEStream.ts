@@ -1,61 +1,50 @@
 import { useCallback, useRef, useState } from "react";
+import type { SSEEvent, ProgressEvent, AnalysisResultEvent } from "@/types/events";
 
-interface SSEStreamOptions<T> {
+interface SSEStreamOptions {
   url: string;
-  onProgress?: (data: any) => void;
-  onResult?: (data: T) => void;
-  onError?: (error: Error) => void;
   maxEvents?: number; // Sliding window size to prevent memory leak
 }
 
-interface SSEStreamState {
-  isStreaming: boolean;
-  error: string | null;
-}
-
 /**
- * Custom hook for handling Server-Sent Events (SSE) streams
+ * Custom hook for handling Server-Sent Events (SSE) streams with consolidated state
  *
  * Features:
- * - Automatic connection management
+ * - Consolidated state management (events, results, streaming status)
  * - Memory leak prevention with sliding window
  * - Error handling and cleanup
  * - TypeScript support
  *
  * @example
- * const { startStream, stopStream, isStreaming } = useSSEStream({
+ * const { events, results, isStreaming, startAnalysis, reset } = useSSEStream({
  *   url: '/api/analyze',
- *   onProgress: (data) => console.log('Progress:', data),
- *   onResult: (data) => console.log('Result:', data),
  *   maxEvents: 100
  * });
+ *
+ * await startAnalysis({ issue_key: 'KAN-9', mode: 'balanced' });
  */
-export function useSSEStream<T = any>(options: SSEStreamOptions<T>) {
+export function useSSEStream(options: SSEStreamOptions) {
   const {
     url,
-    onProgress,
-    onResult,
-    onError,
     maxEvents = 100, // Default: keep last 100 events
   } = options;
 
-  const [state, setState] = useState<SSEStreamState>({
-    isStreaming: false,
-    error: null,
-  });
+  const [events, setEvents] = useState<ProgressEvent[]>([]);
+  const [results, setResults] = useState<AnalysisResultEvent["data"] | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const eventsRef = useRef<any[]>([]);
 
-  const startStream = useCallback(async () => {
+  const startAnalysis = useCallback(async (body: any) => {
     // Clean up previous stream if exists
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
     // Reset state
-    setState({ isStreaming: true, error: null });
-    eventsRef.current = [];
+    setIsStreaming(true);
+    setError(null);
 
     // Create new abort controller
     const abortController = new AbortController();
@@ -63,6 +52,9 @@ export function useSSEStream<T = any>(options: SSEStreamOptions<T>) {
 
     try {
       const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
         signal: abortController.signal,
       });
 
@@ -82,7 +74,7 @@ export function useSSEStream<T = any>(options: SSEStreamOptions<T>) {
         const { done, value } = await reader.read();
 
         if (done) {
-          setState({ isStreaming: false, error: null });
+          setIsStreaming(false);
           break;
         }
 
@@ -95,27 +87,24 @@ export function useSSEStream<T = any>(options: SSEStreamOptions<T>) {
             try {
               const data = JSON.parse(line.slice(6));
 
-              // Implement sliding window to prevent memory leak
-              eventsRef.current.push(data);
-              if (eventsRef.current.length > maxEvents) {
-                eventsRef.current = eventsRef.current.slice(-maxEvents);
-              }
-
               // Handle different event types
               if (data.type === "ProgressEvent" || data.type === "progress") {
-                onProgress?.(data.data || data);
-              } else if (
-                data.type === "result" ||
-                data.type === "AnalysisResultEvent"
-              ) {
-                onResult?.(data.data || data);
+                setEvents((prev) => {
+                  const updated = [...prev, data];
+                  return updated.length > maxEvents ? updated.slice(-maxEvents) : updated;
+                });
+              } else if (data.type === "result" || data.type === "AnalysisResultEvent") {
+                setResults(data.data || data);
               } else if (data.type === "error") {
-                const error = new Error(data.message || "Stream error");
-                onError?.(error);
-                setState({ isStreaming: false, error: error.message });
+                const errorMsg = data.message || "Stream error";
+                setError(errorMsg);
+                setIsStreaming(false);
               } else {
                 // Generic progress event
-                onProgress?.(data);
+                setEvents((prev) => {
+                  const updated = [...prev, data];
+                  return updated.length > maxEvents ? updated.slice(-maxEvents) : updated;
+                });
               }
             } catch (e) {
               console.error("Failed to parse SSE data:", e);
@@ -126,28 +115,36 @@ export function useSSEStream<T = any>(options: SSEStreamOptions<T>) {
     } catch (error: any) {
       if (error.name === "AbortError") {
         // Stream was intentionally aborted
-        setState({ isStreaming: false, error: null });
+        setIsStreaming(false);
       } else {
         const errorMessage = error.message || "Stream connection failed";
-        setState({ isStreaming: false, error: errorMessage });
-        onError?.(error);
+        setError(errorMessage);
+        setIsStreaming(false);
       }
     }
-  }, [url, onProgress, onResult, onError, maxEvents]);
+  }, [url, maxEvents]);
 
   const stopStream = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setState({ isStreaming: false, error: null });
+    setIsStreaming(false);
+  }, []);
+
+  const reset = useCallback(() => {
+    setEvents([]);
+    setResults(null);
+    setError(null);
   }, []);
 
   return {
-    startStream,
+    events,
+    results,
+    isStreaming,
+    error,
+    startAnalysis,
     stopStream,
-    isStreaming: state.isStreaming,
-    error: state.error,
-    events: eventsRef.current,
+    reset,
   };
 }

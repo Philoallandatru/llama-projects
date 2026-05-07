@@ -2,14 +2,7 @@
 
 import { useMemo } from "react";
 import { CheckCircle2, Loader2, Circle } from "lucide-react";
-
-interface ProgressEvent {
-  type: "progress";
-  step: string;
-  status: "running" | "completed" | "pending";
-  message: string;
-  timestamp: string;
-}
+import type { ProgressEvent } from "@/types/events";
 
 interface AnalysisProgressProps {
   events: ProgressEvent[];

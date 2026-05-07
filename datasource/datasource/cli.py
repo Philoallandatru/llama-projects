@@ -5,8 +5,12 @@
 
 import click
 import logging
+import os
 from pathlib import Path
 from typing import Optional
+
+from llama_index.core import Settings
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 from .core.manager import SourceManager
 from .core.models import SourceConfig, SourceType
@@ -19,6 +23,21 @@ logging.basicConfig(
 )
 
 
+def init_llm_settings():
+    """初始化 LLM 设置"""
+    # 从环境变量读取配置
+    api_key = os.getenv("OPENAI_API_KEY", "lm-studio")
+    api_base = os.getenv("OPENAI_API_BASE", "http://127.0.0.1:1234/v1")
+
+    # 配置 embedding 模型
+    # 使用 text-embedding-3-small 作为模型名称，实际会被 LM Studio 重定向到加载的模型
+    Settings.embed_model = OpenAIEmbedding(
+        api_key=api_key,
+        api_base=api_base,
+        model="text-embedding-3-small"
+    )
+
+
 @click.group()
 @click.option('--data-dir', type=click.Path(), default='data', help='数据目录路径')
 @click.pass_context
@@ -27,6 +46,9 @@ def cli(ctx, data_dir):
 
     支持本地文件、Jira、Confluence 等多种数据源。
     """
+    # 初始化 LLM 设置
+    init_llm_settings()
+
     ctx.ensure_object(dict)
     ctx.obj['manager'] = SourceManager(Path(data_dir))
 
@@ -84,13 +106,12 @@ def add(ctx, name: str, source_type: str, path: Optional[str], server: Optional[
 
         config = SourceConfig(
             name=name,
-            type=SourceType(source_type.upper()),
+            type=SourceType(source_type),
             path=path,
             server=server,
             project=project,
             jql=jql,
             space=space,
-            cql=cql,
             description=description,
             options=options
         )

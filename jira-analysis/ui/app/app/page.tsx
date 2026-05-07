@@ -4,28 +4,39 @@ import { useState } from "react";
 import { Search, Sparkles } from "lucide-react";
 import AnalysisProgress from "@/components/AnalysisProgress";
 import AnalysisResults from "@/components/AnalysisResults";
+import { useSSEStream } from "@/hooks/useSSEStream";
 
 export default function DeepAnalysisPage() {
   const [issueKey, setIssueKey] = useState("");
-  const [analysisMode, setAnalysisMode] = useState<"deep" | "quick">("deep");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [results, setResults] = useState<any>(null);
+
+  const { startStream, isStreaming } = useSSEStream({
+    url: `http://localhost:4501/api/analyze`,
+    onProgress: (data) => {
+      setEvents((prev) => [...prev.slice(-99), data]); // Sliding window: keep last 100
+    },
+    onResult: (data) => {
+      setResults(data);
+    },
+    maxEvents: 100,
+  });
 
   const handleAnalyze = async () => {
     if (!issueKey.trim()) return;
 
-    setIsAnalyzing(true);
     setEvents([]);
     setResults(null);
 
+    // Start SSE stream with POST body
     try {
-      const response = await fetch("http://localhost:4501/deployments/jira-analysis/tasks/create", {
+      const response = await fetch("http://localhost:4501/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workflow: "deep_analysis",
-          params: { issue_key: issueKey.trim() },
+          issue_key: issueKey.trim(),
+          mode: "balanced",
+          retrieve_evidence: true,
         }),
       });
 
@@ -45,20 +56,22 @@ export default function DeepAnalysisPage() {
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.slice(6));
+            try {
+              const data = JSON.parse(line.slice(6));
 
-            if (data.type === "progress") {
-              setEvents((prev) => [...prev, data]);
-            } else if (data.type === "result") {
-              setResults(data.data);
+              if (data.type === "ProgressEvent" || data.type === "progress") {
+                setEvents((prev) => [...prev.slice(-99), data]);
+              } else if (data.type === "result") {
+                setResults(data.data);
+              }
+            } catch (e) {
+              console.error("Failed to parse SSE data:", e);
             }
           }
         }
       }
     } catch (error) {
       console.error("Analysis failed:", error);
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
@@ -92,15 +105,15 @@ export default function DeepAnalysisPage() {
                 onChange={(e) => setIssueKey(e.target.value)}
                 placeholder="e.g., KAN-9"
                 className="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isAnalyzing}
+                disabled={isStreaming}
               />
               <button
                 onClick={handleAnalyze}
-                disabled={isAnalyzing || !issueKey.trim()}
+                disabled={isStreaming || !issueKey.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-md"
               >
                 <Search className="w-5 h-5" />
-                {isAnalyzing ? "Analyzing..." : "Analyze"}
+                {isStreaming ? "Analyzing..." : "Analyze"}
               </button>
             </div>
           </div>
@@ -111,24 +124,14 @@ export default function DeepAnalysisPage() {
             </label>
             <div className="flex gap-3">
               <button
-                onClick={() => setAnalysisMode("deep")}
-                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                  analysisMode === "deep"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "bg-white text-slate-700 border border-slate-300 hover:border-blue-400"
-                }`}
-                disabled={isAnalyzing}
+                className="flex-1 px-4 py-3 rounded-lg font-medium transition-all bg-blue-600 text-white shadow-md"
+                disabled={isStreaming}
               >
                 Deep Analysis
               </button>
               <button
-                onClick={() => setAnalysisMode("quick")}
-                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                  analysisMode === "quick"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "bg-white text-slate-700 border border-slate-300 hover:border-blue-400"
-                }`}
-                disabled={isAnalyzing}
+                className="flex-1 px-4 py-3 rounded-lg font-medium transition-all bg-white text-slate-700 border border-slate-300 hover:border-blue-400"
+                disabled={isStreaming}
               >
                 Quick Analysis
               </button>
@@ -138,7 +141,7 @@ export default function DeepAnalysisPage() {
       </div>
 
       {/* Progress Section */}
-      {isAnalyzing && events.length > 0 && (
+      {isStreaming && events.length > 0 && (
         <AnalysisProgress events={events} />
       )}
 

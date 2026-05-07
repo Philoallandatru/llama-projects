@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { CheckCircle2, Loader2, Circle } from "lucide-react";
 
 interface ProgressEvent {
@@ -22,15 +23,13 @@ const STEPS = [
 ];
 
 export default function AnalysisProgress({ events }: AnalysisProgressProps) {
-  const getStepStatus = (stepKey: string) => {
-    const event = events.find((e) => e.step === stepKey);
-    return event?.status || "pending";
-  };
-
-  const getStepMessage = (stepKey: string) => {
-    const event = events.find((e) => e.step === stepKey);
-    return event?.message || "";
-  };
+  // Memoize status map to avoid O(n²) array scans on every render
+  const statusMap = useMemo(() => {
+    return events.reduce((acc, event) => {
+      acc[event.step] = event;
+      return acc;
+    }, {} as Record<string, ProgressEvent>);
+  }, [events]);
 
   return (
     <div className="glass rounded-2xl p-8 shadow-lg mb-8">
@@ -38,8 +37,9 @@ export default function AnalysisProgress({ events }: AnalysisProgressProps) {
 
       <div className="space-y-4">
         {STEPS.map((step, index) => {
-          const status = getStepStatus(step.key);
-          const message = getStepMessage(step.key);
+          const event = statusMap[step.key];
+          const status = event?.status || "pending";
+          const message = event?.message || "";
 
           return (
             <div key={step.key} className="flex items-start gap-4">

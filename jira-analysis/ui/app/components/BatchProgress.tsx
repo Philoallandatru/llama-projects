@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, Circle, XCircle, Clock } from "lucide-react";
+import { calculatePercentage, formatTime } from "@/lib/utils";
 
 interface BatchProgressProps {
   total: number;
@@ -15,16 +16,9 @@ interface BatchProgressProps {
 }
 
 export default function BatchProgress({ total, current, items, estimatedTimeRemaining }: BatchProgressProps) {
-  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+  const percentage = calculatePercentage(current, total);
   const completed = items.filter(i => i.status === "completed").length;
   const errors = items.filter(i => i.status === "error").length;
-
-  const formatTime = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}m ${secs}s`;
-  };
 
   return (
     <div className="glass rounded-2xl p-8 shadow-lg">

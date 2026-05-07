@@ -151,14 +151,12 @@ class DeepAnalysisWorkflow(Workflow):
             RouteEvent
         """
         logger.info(f"Loading issue with config: server={self.jira_config['server']}")
-        print(f"[DEBUG] Creating IssueLoader with server={self.jira_config['server']}")
 
         loader = IssueLoader(
             server=self.jira_config["server"],
             email=self.jira_config["email"],
             token=self.jira_config["token"]
         )
-        print(f"[DEBUG] IssueLoader created, loader.server={loader.server}")
 
         issue_data = await loader.load_issue_realtime(ev.issue_key)
         await ctx.store.set("issue_data", issue_data)

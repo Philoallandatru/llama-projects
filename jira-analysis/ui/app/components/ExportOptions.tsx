@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, FileText, Mail, BookOpen } from "lucide-react";
+import { downloadFile, calculatePercentage } from "@/lib/utils";
 
 interface ExportOptionsProps {
   reportData: {
@@ -26,7 +27,7 @@ export default function ExportOptions({ reportData }: ExportOptionsProps) {
     markdown += `- **Total Issues**: ${reportData.summary.total}\n`;
     markdown += `- **Completed**: ${reportData.summary.completed}\n`;
     markdown += `- **Errors**: ${reportData.summary.errors}\n`;
-    markdown += `- **Success Rate**: ${Math.round((reportData.summary.completed / reportData.summary.total) * 100)}%\n\n`;
+    markdown += `- **Success Rate**: ${calculatePercentage(reportData.summary.completed, reportData.summary.total)}%\n\n`;
 
     if (Object.keys(reportData.summary.profiles).length > 0) {
       markdown += `### Profile Distribution\n\n`;
@@ -47,28 +48,20 @@ export default function ExportOptions({ reportData }: ExportOptionsProps) {
       markdown += `---\n\n`;
     });
 
-    const blob = new Blob([markdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `batch-analysis-${new Date().toISOString().split("T")[0]}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadFile(
+      markdown,
+      `batch-analysis-${new Date().toISOString().split("T")[0]}.md`,
+      "text/markdown"
+    );
   };
 
   const handleExportJSON = () => {
     const json = JSON.stringify(reportData, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `batch-analysis-${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadFile(
+      json,
+      `batch-analysis-${new Date().toISOString().split("T")[0]}.json`,
+      "application/json"
+    );
   };
 
   const handleSaveToKnowledge = async () => {

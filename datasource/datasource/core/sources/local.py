@@ -61,16 +61,20 @@ class LocalDataSource(BaseDataSource):
         if not self.root_path.is_dir():
             raise ValueError(f"Path is not a directory: {config.path}")
 
-        # 初始化 MinerU PDF 阅读器
-        self.mineru_reader = MinerUReader(
-            skip_toc=True,
-            min_page_length=50,
-            method="auto",
-            backend="pipeline",
-            lang="ch",
-            formula_enable=True,
-            table_enable=True
-        )
+        # 初始化 MinerU PDF 阅读器（如果可用）
+        try:
+            self.mineru_reader = MinerUReader(
+                skip_toc=True,
+                min_page_length=50,
+                method="auto",
+                backend="pipeline",
+                lang="ch",
+                formula_enable=True,
+                table_enable=True
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize MinerU reader: {e}")
+            self.mineru_reader = None
 
     def fetch_raw(
         self,

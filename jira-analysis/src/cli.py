@@ -10,8 +10,8 @@ import click
 # from llama_index.core.workflow import draw_all_possible_flows  # TODO: Not available in current llama-index version
 
 from .settings import init_settings
-from .workflows.deep_analysis import DeepAnalysisWorkflow
-from .workflows.batch_analysis import BatchAnalysisWorkflow
+from .workflow_modules.deep_analysis import DeepAnalysisWorkflow
+from .workflow_modules.batch_analysis import BatchAnalysisWorkflow
 
 
 @click.group()

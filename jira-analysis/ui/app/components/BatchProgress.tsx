@@ -11,7 +11,7 @@ interface BatchProgressProps {
   estimatedTimeRemaining?: number;
 }
 
-export default function BatchProgress({ total, current, items, estimatedTimeRemaining }: BatchProgressProps) {
+export default function BatchProgress({ total, current, items = [], estimatedTimeRemaining }: BatchProgressProps) {
   const percentage = calculatePercentage(current, total);
   const completed = items.filter(i => i.status === "completed").length;
   const errors = items.filter(i => i.status === "error").length;

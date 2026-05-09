@@ -11,8 +11,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.settings import settings, init_settings
-from src.workflows.deep_analysis import DeepAnalysisWorkflow
-from src.workflows.batch_analysis import BatchAnalysisWorkflow
+from src.workflow_modules.deep_analysis import DeepAnalysisWorkflow
+from src.workflow_modules.batch_analysis import BatchAnalysisWorkflow
 
 
 # Request models
